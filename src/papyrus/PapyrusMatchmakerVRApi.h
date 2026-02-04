@@ -74,7 +74,7 @@ namespace PapyrusMatchmakerVRApi {
     inline bool Bind(VM* a_vm)
     {
         if (!a_vm) {
-            spdlog::error("PapyrusMatchmakerVRApi::Bind: VM is null");
+            spdlog::error("PapyrusMatchmakerVR_Api::Bind: VM is null");
             return false;
         }
 

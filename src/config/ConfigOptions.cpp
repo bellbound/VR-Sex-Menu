@@ -1,7 +1,6 @@
 #include "ConfigOptions.h"
 #include "ConfigStorage.h"
 #include "VRHookAPI.h"  // Brings in openvr.h with vr::EVRButtonId and ButtonMaskFromId
-#include <RE/Skyrim.h>
 #include <Windows.h>
 
 namespace Config {
@@ -73,12 +72,6 @@ void RegisterConfigOptions()
     config->RegisterFloatOption(Options::kMaxSceneRange, 7.0f);      // Default: 7 meters
     config->RegisterIntOption(Options::kActivatePromptEnabled, 1);   // Default: show prompt
     config->RegisterIntOption(Options::kHiggsQuickStartEnabled, 1);  // Default: enabled (if HIGGS present)
-
-    // ==========================================================================
-    // [Sexlab] Section
-    // ==========================================================================
-
-    config->RegisterIntOption(Options::kSexlabEnabled, 1);  // Default: enabled
 }
 
 bool IsHiggsInstalled()
@@ -89,20 +82,6 @@ bool IsHiggsInstalled()
 
     if (!checked) {
         installed = (GetModuleHandleA("higgs_vr.dll") != nullptr);
-        checked = true;
-    }
-
-    return installed;
-}
-
-bool IsSexlabInstalled()
-{
-    static bool checked = false;
-    static bool installed = false;
-
-    if (!checked) {
-        auto* handler = RE::TESDataHandler::GetSingleton();
-        installed = handler && handler->GetLoadedModIndex("SexLab.esm").has_value();
         checked = true;
     }
 

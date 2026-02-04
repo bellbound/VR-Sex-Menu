@@ -56,16 +56,6 @@ public:
         const char* elementId,
         void* userData);
 
-    /// Check if "Start NPC SexLab Scene..." should appear for this actor
-    static bool IsEligibleForNPCSexlabScene(RE::Actor* actor, void* userData);
-
-    /// Called when user selects "Start NPC SexLab Scene..."
-    static void OnNPCSexlabSceneActivated(
-        RE::Actor* actor,
-        const char* modId,
-        const char* elementId,
-        void* userData);
-
 private:
     MatchmakerMenuManager() = default;
     ~MatchmakerMenuManager() = default;
@@ -74,14 +64,11 @@ private:
 
     /// Show the ActorSelectionMenu (helper for thread validation callback)
     static void ShowActorSelectionMenu(RE::Actor* actor);
-    /// Show the ActorSelectionMenu for SexLab flow
-    static void ShowSexlabSelectionMenu(RE::Actor* actor);
 
     P3DUI::Interface001* m_interface = nullptr;
     P3DUI::ActorMenuInterface* m_actorMenu = nullptr;
     bool m_initialized = false;
     bool m_actorMenuRegistered = false;
-    bool m_actorMenuSexlabRegistered = false;
 
     /// Currently active thread ID (for menu coordination)
     int32_t m_activeThreadId = -1;
@@ -90,6 +77,4 @@ private:
     static constexpr const char* MOD_ID = "MatchmakerVR";
     static constexpr const char* ELEMENT_ID = "start_npc_scene";
     static constexpr const char* ELEMENT_TEXTURE = "textures\\Matchmaker\\ostim.dds";
-    static constexpr const char* SEXLAB_ELEMENT_ID = "start_npc_sexlab_scene";
-    static constexpr const char* SEXLAB_ELEMENT_TEXTURE = "textures\\Matchmaker\\sexlab.dds";
 };

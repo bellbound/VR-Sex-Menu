@@ -414,7 +414,7 @@ std::vector<std::string> ConfigStorage::GetSelectOptions(std::string_view key)
     std::lock_guard<std::mutex> lock(m_mutex);
 
     auto it = m_selectOptions.find(std::string(key));
-    if (it != m_selectOptions.end() && !it->second.empty()) {
+    if (it != m_selectOptions.end()) {
         return it->second;
     }
     return { "Option Not Found" };

@@ -121,9 +121,6 @@ namespace PapyrusAdapter {
                                                             RE::BSFixedString optionName)
     {
         auto options = ConfigStorage::GetSingleton()->GetSelectOptions(optionName.c_str());
-        if (options.empty()) {
-            options.emplace_back("Option Not Found");
-        }
         std::vector<RE::BSFixedString> result;
         result.reserve(options.size());
         for (const auto& opt : options) {

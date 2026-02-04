@@ -2,7 +2,6 @@
 #include "config/ConfigOptions.h"
 #include "menu/UIExtActorSelector.h"
 #include "menu/SceneStartManager.h"
-#include "menu/SexlabThreadMenu.h"
 #include "menu/ThreadMenu.h"
 #include "persistence/ThreadStorageManager.h"
 #include "ostim/ThreadTracker.h"
@@ -35,9 +34,7 @@ bool MatchmakerMenuManager::Initialize()
 bool MatchmakerMenuManager::RegisterActorMenuElement()
 {
     if (m_actorMenuRegistered) {
-        if (m_actorMenuSexlabRegistered || !Config::IsSexlabEnabled() || !Config::IsSexlabInstalled()) {
-            return true;
-        }
+        return true;
     }
 
     if (!m_initialized) {
@@ -52,78 +49,37 @@ bool MatchmakerMenuManager::RegisterActorMenuElement()
         return false;
     }
 
-    bool ostimRegistered = false;
-    bool sexlabRegistered = false;
+    // Configure the element
+    P3DUI::ActorMenuElementConfig config =
+        P3DUI::ActorMenuElementConfig::Default(MOD_ID, ELEMENT_ID);
+    config.texturePath = ELEMENT_TEXTURE;
+    config.tooltip = L"Start NPC OStim Scene...";
+    config.scale = 1.2f;
 
-    if (!m_actorMenuRegistered) {
-        // Configure the OStim element
-        P3DUI::ActorMenuElementConfig config =
-            P3DUI::ActorMenuElementConfig::Default(MOD_ID, ELEMENT_ID);
-        config.texturePath = ELEMENT_TEXTURE;
-        config.tooltip = L"Start NPC OStim Scene...";
-        config.scale = 1.2f;
+    // Get callback addresses for diagnostic logging
+    auto eligibilityCallback = &MatchmakerMenuManager::IsEligibleForNPCScene;
+    auto activationCallback = &MatchmakerMenuManager::OnNPCSceneActivated;
 
-        // Get callback addresses for diagnostic logging
-        auto eligibilityCallback = &MatchmakerMenuManager::IsEligibleForNPCScene;
-        auto activationCallback = &MatchmakerMenuManager::OnNPCSceneActivated;
+    spdlog::info("MatchmakerMenuManager: Registering callbacks - eligibility={}, activation={}, userData={}",
+        reinterpret_cast<void*>(eligibilityCallback),
+        reinterpret_cast<void*>(activationCallback),
+        static_cast<void*>(this));
 
-        spdlog::info("MatchmakerMenuManager: Registering callbacks - eligibility={}, activation={}, userData={}",
-            reinterpret_cast<void*>(eligibilityCallback),
-            reinterpret_cast<void*>(activationCallback),
-            static_cast<void*>(this));
+    // Register with callbacks
+    bool success = m_actorMenu->RegisterElement(
+        config,
+        eligibilityCallback,
+        activationCallback,
+        this);
 
-        // Register with callbacks
-        bool success = m_actorMenu->RegisterElement(
-            config,
-            eligibilityCallback,
-            activationCallback,
-            this);
-
-        if (success) {
-            m_actorMenuRegistered = true;
-            ostimRegistered = true;
-            spdlog::info("MatchmakerMenuManager: Registered ActorMenu element '{}'", ELEMENT_ID);
-        } else {
-            spdlog::error("MatchmakerMenuManager: Failed to register ActorMenu element");
-        }
-    }
-
-    if (Config::IsSexlabEnabled() && Config::IsSexlabInstalled()) {
-        if (!m_actorMenuSexlabRegistered) {
-            P3DUI::ActorMenuElementConfig sexlabConfig =
-                P3DUI::ActorMenuElementConfig::Default(MOD_ID, SEXLAB_ELEMENT_ID);
-            sexlabConfig.texturePath = SEXLAB_ELEMENT_TEXTURE;
-            sexlabConfig.tooltip = L"Start NPC SexLab Scene...";
-            sexlabConfig.scale = 1.2f;
-
-            auto sexlabEligibilityCallback = &MatchmakerMenuManager::IsEligibleForNPCSexlabScene;
-            auto sexlabActivationCallback = &MatchmakerMenuManager::OnNPCSexlabSceneActivated;
-
-            spdlog::info("MatchmakerMenuManager: Registering SexLab callbacks - eligibility={}, activation={}, userData={}",
-                reinterpret_cast<void*>(sexlabEligibilityCallback),
-                reinterpret_cast<void*>(sexlabActivationCallback),
-                static_cast<void*>(this));
-
-            // bool sexlabSuccess = m_actorMenu->RegisterElement(
-            //     sexlabConfig,
-            //     sexlabEligibilityCallback,
-            //     sexlabActivationCallback,
-            //     this);
-
-            // if (sexlabSuccess) {
-            //     m_actorMenuSexlabRegistered = true;
-            //     sexlabRegistered = true;
-            //     spdlog::info("MatchmakerMenuManager: Registered ActorMenu element '{}'", SEXLAB_ELEMENT_ID);
-            // } else {
-            //     spdlog::error("MatchmakerMenuManager: Failed to register SexLab ActorMenu element");
-            // }
-        }
+    if (success) {
+        m_actorMenuRegistered = true;
+        spdlog::info("MatchmakerMenuManager: Registered ActorMenu element '{}'", ELEMENT_ID);
     } else {
-        spdlog::info("MatchmakerMenuManager: SexLab element not registered (disabled or SexLab.esm missing)");
+        spdlog::error("MatchmakerMenuManager: Failed to register ActorMenu element");
     }
 
-    return m_actorMenuRegistered || m_actorMenuSexlabRegistered ||
-           ostimRegistered || sexlabRegistered;
+    return success;
 }
 
 // === ActorMenu Callbacks ===
@@ -132,25 +88,6 @@ bool MatchmakerMenuManager::IsEligibleForNPCScene(RE::Actor* actor, void* /*user
 {
     // Check master mod toggle and feature toggle
     if (!Config::IsModEnabled() || !Config::IsGrabNpcTriggerEnabled()) {
-        return false;
-    }
-
-    // Show for any living, non-player NPC
-    if (!actor) return false;
-    if (actor->IsPlayerRef()) return false;
-    if (actor->IsDead()) return false;
-
-    return true;
-}
-
-bool MatchmakerMenuManager::IsEligibleForNPCSexlabScene(RE::Actor* actor, void* /*userData*/)
-{
-    // Check master mod toggle, feature toggle, and SexLab availability
-    if (!Config::IsModEnabled() || !Config::IsGrabNpcTriggerEnabled()) {
-        return false;
-    }
-
-    if (!Config::IsSexlabEnabled() || !Config::IsSexlabInstalled()) {
         return false;
     }
 
@@ -220,41 +157,6 @@ void MatchmakerMenuManager::OnNPCSceneActivated(
     }
 }
 
-void MatchmakerMenuManager::OnNPCSexlabSceneActivated(
-    RE::Actor* actor,
-    const char* modId,
-    const char* elementId,
-    void* userData)
-{
-    // Close any existing menus before showing new ones
-    GetSingleton()->HideAllMenus();
-
-    spdlog::info("MatchmakerMenuManager::OnNPCSexlabSceneActivated ENTRY - modId={}, elementId={}, userData={}, actor={}",
-        modId ? modId : "null",
-        elementId ? elementId : "null",
-        userData ? "valid" : "null",
-        static_cast<void*>(actor));
-
-    const char* actorName = "null";
-    if (actor) {
-        try {
-            actorName = actor->GetName();
-            if (!actorName) actorName = "<no name>";
-        } catch (...) {
-            actorName = "<exception getting name>";
-        }
-    }
-
-    spdlog::info("MatchmakerMenuManager: SexLab scene activated for '{}'", actorName);
-
-    if (!actor) {
-        spdlog::warn("MatchmakerMenuManager: Actor is null, aborting");
-        return;
-    }
-
-    ShowSexlabSelectionMenu(actor);
-}
-
 void MatchmakerMenuManager::ShowActorSelectionMenu(RE::Actor* actor)
 {
     spdlog::info("MatchmakerMenuManager: Starting UIExtActorSelector flow...");
@@ -281,26 +183,6 @@ void MatchmakerMenuManager::ShowActorSelectionMenu(RE::Actor* actor)
         });
 
     spdlog::info("MatchmakerMenuManager: UIExtActorSelector::ShowActorSelection() dispatched");
-}
-
-void MatchmakerMenuManager::ShowSexlabSelectionMenu(RE::Actor* actor)
-{
-    spdlog::info("MatchmakerMenuManager: Starting UIExtActorSelector flow for SexLab...");
-
-    UIExtActorSelector::GetSingleton()->ShowActorSelection(actor,
-        [](std::vector<RE::Actor*> selectedActors) {
-            if (selectedActors.empty()) {
-                spdlog::info("MatchmakerMenuManager: SexLab actor selection cancelled");
-                return;
-            }
-
-            spdlog::info("MatchmakerMenuManager: {} actors selected, opening SexLab browser...",
-                selectedActors.size());
-
-            SexlabThreadMenu::GetSingleton()->Show(selectedActors);
-        });
-
-    spdlog::info("MatchmakerMenuManager: UIExtActorSelector::ShowActorSelection() dispatched for SexLab");
 }
 
 // === Scene Lifecycle ===

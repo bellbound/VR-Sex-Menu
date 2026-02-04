@@ -550,16 +550,6 @@ struct Root : Container {
     virtual void SetTooltipsEnabled(bool enabled) = 0;
     virtual bool GetTooltipsEnabled() = 0;
 
-    // === Convenience Methods ===
-    // Shows the menu at the specified hand's current position.
-    // Equivalent to: SetVisible(true); StartPositioning(isLeftHand); EndPositioning();
-    // The menu appears at the hand and then stays fixed at that world position.
-    inline void ShowAtHand(bool isLeftHand) {
-        SetVisible(true);
-        StartPositioning(isLeftHand);
-        EndPositioning();
-    }
-
     // === Reserved for future expansion ===
     virtual void _root_reserved1() {}
     virtual void _root_reserved2() {}

@@ -42,14 +42,6 @@ namespace Options {
     /// Enable HIGGS grab + trigger quick-start for OStim scenes.
     /// Type: bool (int 0/1), Default: 1 (enabled)
     constexpr std::string_view kHiggsQuickStartEnabled = "Controls:bHiggsQuickStartEnabled";
-
-    // ==========================================================================
-    // [Sexlab] Section
-    // ==========================================================================
-
-    /// Enable SexLab integration for Matchmaker VR.
-    /// Type: bool (int 0/1), Default: 1 (enabled)
-    constexpr std::string_view kSexlabEnabled = "Sexlab:bEnabled";
 }
 
 /// Register all options with defaults. Call after ConfigStorage::Initialize().
@@ -57,9 +49,6 @@ void RegisterConfigOptions();
 
 /// Check if HIGGS VR is installed (for MCM conditional options)
 bool IsHiggsInstalled();
-
-/// Check if SexLab.esm is loaded (for integration gating)
-bool IsSexlabInstalled();
 
 // =============================================================================
 // Config Accessors - Convenience functions for reading config values
@@ -162,16 +151,6 @@ inline float GetHotkeyMaxDistance()
 inline float GetHotkeyMaxDistanceMeters()
 {
     return ConfigStorage::GetSingleton()->GetFloat(Options::kMaxSceneRange, 7.0f);
-}
-
-// ============================================================================
-// [Sexlab]
-// ============================================================================
-
-/// Check if SexLab integration is enabled.
-inline bool IsSexlabEnabled()
-{
-    return ConfigStorage::GetSingleton()->GetInt(Options::kSexlabEnabled, 1) != 0;
 }
 
 } // namespace Config
