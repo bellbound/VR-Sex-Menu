@@ -1,0 +1,39 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+
+# IDE directories
+.idea/
+.vs/
+.vscode/
+*.vcxproj.user
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Compiled files
+*.dll
+*.exe
+*.pdb
+*.obj
+*.lib
+*.exp
+*.ilk
+
+# vcpkg downloaded packages (can be re-downloaded)
+vcpkg_installed/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Converted icons (can be regenerated)
+assets/icons/converted/
+assets/icons/dds/
+
+# OS generated files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "animations": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "actors": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "add_cum": {
+                  "type": "integer"
+                },
+                "race": {
+                  "type": "string"
+                },
+                "stages": {
+                  "items": {
+                    "additionalProperties": true,
+                    "properties": {
+                      "add_cum": {
+                        "type": "integer"
+                      },
+                      "forward": {
+                        "type": "number"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "open_mouth": {
+                        "type": "boolean"
+                      },
+                      "rotate": {
+                        "type": "integer"
+                      },
+                      "silent": {
+                        "type": "boolean"
+                      },
+                      "sos": {
+                        "type": "integer"
+                      },
+                      "strap_on": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "stages",
+                "type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "creature_race": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sound": {
+            "type": "string"
+          },
+          "stages": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "number": {
+                  "type": "integer"
+                },
+                "sound": {
+                  "type": "string"
+                },
+                "timer": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "number"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "tags": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "actors",
+          "id",
+          "name",
+          "sound",
+          "tags"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "animations",
+    "name"
+  ],
+  "title": "Animation Packs Schema",
+  "type": "object"
+}
