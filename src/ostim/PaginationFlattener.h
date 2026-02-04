@@ -100,7 +100,7 @@ public:
     static PaginationFlattener* GetSingleton();
 
     /// Load pagination rules from config file.
-    /// Reads from: Data/SKSE/Plugins/Matchmaker/pagination_rules.json
+    /// Reads from: Data/SKSE/Plugins/VRSexMenu/pagination_rules.json
     void LoadRules();
 
     /// Force reload of rules (e.g., after config change)

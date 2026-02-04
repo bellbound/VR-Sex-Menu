@@ -50,7 +50,7 @@ bool OstimPapyrusAPI::StartScene(
     }
 
     // Create async callback - will invoke user callback when Papyrus returns
-    auto callbackImpl = RE::make_smart<Matchmaker::AsyncIntCallbackFunctor>(
+    auto callbackImpl = RE::make_smart<VRSexMenu::AsyncIntCallbackFunctor>(
         [callback](int32_t threadId) {
             spdlog::info("OstimPapyrusAPI: QuickStart returned thread ID {}", threadId);
             if (callback) callback(threadId);
@@ -83,14 +83,14 @@ bool OstimPapyrusAPI::NavigateTo(int32_t threadId, const std::string& sceneId)
 {
     spdlog::info("OstimPapyrusAPI: Navigating thread {} to '{}'", threadId, sceneId);
 
-    auto* papyrus = Matchmaker::PapyrusInterface::GetSingleton();
+    auto* papyrus = VRSexMenu::PapyrusInterface::GetSingleton();
     if (!papyrus) {
         spdlog::error("OstimPapyrusAPI: PapyrusInterface not available");
         return false;
     }
 
     // OThread.NavigateTo(int ThreadID, string SceneID)
-    std::vector<Matchmaker::PapyrusValue> args;
+    std::vector<VRSexMenu::PapyrusValue> args;
     args.push_back(threadId);   // int ThreadID
     args.push_back(sceneId);    // string SceneID
 
@@ -108,14 +108,14 @@ bool OstimPapyrusAPI::StopScene(int32_t threadId)
 {
     spdlog::info("OstimPapyrusAPI: Stopping thread {}", threadId);
 
-    auto* papyrus = Matchmaker::PapyrusInterface::GetSingleton();
+    auto* papyrus = VRSexMenu::PapyrusInterface::GetSingleton();
     if (!papyrus) {
         spdlog::error("OstimPapyrusAPI: PapyrusInterface not available");
         return false;
     }
 
     // OThread.Stop(int ThreadID)
-    std::vector<Matchmaker::PapyrusValue> args;
+    std::vector<VRSexMenu::PapyrusValue> args;
     args.push_back(threadId);   // int ThreadID
 
     bool dispatched = papyrus->CallGlobalFunction("OThread", "Stop", args);
@@ -154,7 +154,7 @@ static void GetSceneWithRetry(int32_t threadId, OstimPapyrusAPI::SceneCallback c
     auto sharedCallback = std::make_shared<OstimPapyrusAPI::SceneCallback>(std::move(callback));
 
     // Create async callback - will invoke user callback when Papyrus returns
-    auto callbackImpl = RE::make_smart<Matchmaker::AsyncStringCallbackFunctor>(
+    auto callbackImpl = RE::make_smart<VRSexMenu::AsyncStringCallbackFunctor>(
         [sharedCallback, threadId, retriesRemaining](const std::string& sceneId) {
             spdlog::info("OstimPapyrusAPI::GetScene: Thread {} scene is '{}'", threadId, sceneId);
 
@@ -208,7 +208,7 @@ bool OstimPapyrusAPI::GetActors(int32_t threadId, ActorsCallback callback)
     }
 
     // Create async callback
-    auto callbackImpl = RE::make_smart<Matchmaker::AsyncActorArrayCallbackFunctor>(
+    auto callbackImpl = RE::make_smart<VRSexMenu::AsyncActorArrayCallbackFunctor>(
         [callback, threadId](const std::vector<RE::Actor*>& actors) {
             spdlog::info("OstimPapyrusAPI::GetActors: Thread {} has {} actors", threadId, actors.size());
             if (callback) callback(actors);
@@ -243,7 +243,7 @@ bool OstimPapyrusAPI::IsInAutoMode(int32_t threadId, BoolCallback callback)
     }
 
     // Create async callback
-    auto callbackImpl = RE::make_smart<Matchmaker::AsyncBoolCallbackFunctor>(
+    auto callbackImpl = RE::make_smart<VRSexMenu::AsyncBoolCallbackFunctor>(
         [callback, threadId](bool isAuto) {
             spdlog::debug("OstimPapyrusAPI::IsInAutoMode: Thread {} auto mode = {}", threadId, isAuto);
             if (callback) callback(isAuto);
@@ -270,14 +270,14 @@ bool OstimPapyrusAPI::StartAutoMode(int32_t threadId)
 {
     spdlog::info("OstimPapyrusAPI: Starting auto mode for thread {}", threadId);
 
-    auto* papyrus = Matchmaker::PapyrusInterface::GetSingleton();
+    auto* papyrus = VRSexMenu::PapyrusInterface::GetSingleton();
     if (!papyrus) {
         spdlog::error("OstimPapyrusAPI::StartAutoMode: PapyrusInterface not available");
         return false;
     }
 
     // OThread.StartAutoMode(int ThreadID)
-    std::vector<Matchmaker::PapyrusValue> args;
+    std::vector<VRSexMenu::PapyrusValue> args;
     args.push_back(threadId);
 
     bool dispatched = papyrus->CallGlobalFunction("OThread", "StartAutoMode", args);
@@ -294,14 +294,14 @@ bool OstimPapyrusAPI::StopAutoMode(int32_t threadId)
 {
     spdlog::info("OstimPapyrusAPI: Stopping auto mode for thread {}", threadId);
 
-    auto* papyrus = Matchmaker::PapyrusInterface::GetSingleton();
+    auto* papyrus = VRSexMenu::PapyrusInterface::GetSingleton();
     if (!papyrus) {
         spdlog::error("OstimPapyrusAPI::StopAutoMode: PapyrusInterface not available");
         return false;
     }
 
     // OThread.StopAutoMode(int ThreadID)
-    std::vector<Matchmaker::PapyrusValue> args;
+    std::vector<VRSexMenu::PapyrusValue> args;
     args.push_back(threadId);
 
     bool dispatched = papyrus->CallGlobalFunction("OThread", "StopAutoMode", args);

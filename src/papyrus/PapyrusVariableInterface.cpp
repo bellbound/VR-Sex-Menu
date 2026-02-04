@@ -18,7 +18,7 @@ namespace RE {
     }
 }
 
-namespace Matchmaker {
+namespace VRSexMenu {
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Script Collector Functor
@@ -579,6 +579,6 @@ namespace Matchmaker {
         return std::nullopt;
     }
 
-} // namespace Matchmaker
+} // namespace VRSexMenu
 
 #pragma pop_macro("GetObject")

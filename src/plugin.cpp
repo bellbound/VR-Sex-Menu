@@ -2,7 +2,7 @@
 #include "settings.h"
 #include "InputManager.h"
 #include "MenuChecker.h"
-#include "MatchmakerMenuManager.h"
+#include "VRSexMenuManager.h"
 #include "menu/ActorActivationHandler.h"
 #include "menu/ThreadMenuHotkeyManager.h"
 #include "persistence/SaveGameDataManager.h"
@@ -10,7 +10,7 @@
 #include "ostim/OstimTranslationLoader.h"
 #include "ostim/OstimThreadInterface.h"
 #include "ostim/CompatibilityTable.h"
-#include "papyrus/PapyrusMatchmakerVRApi.h"
+#include "papyrus/PapyrusVRSexMenuApi.h"
 #include "config/ConfigStorage.h"
 #include "config/ConfigStoragePapyrusAdapter.h"
 #include "config/ConfigOptions.h"
@@ -64,19 +64,19 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 		// Register activation event handler for OStim scene actor popup
 		ActorActivationHandler::Register();
 
-		// Initialize 3DUI interface for MatchmakerMenuManager
+		// Initialize 3DUI interface for VRSexMenuManager
 		spdlog::info("Attempting to get 3DUI interface...");
-		if (MatchmakerMenuManager::GetSingleton()->Initialize()) {
-			spdlog::info("MatchmakerMenuManager initialized successfully");
+		if (VRSexMenuManager::GetSingleton()->Initialize()) {
+			spdlog::info("VRSexMenuManager initialized successfully");
 
 			// Register the "Start NPC OStim Scene..." element in ActorMenu
-			if (MatchmakerMenuManager::GetSingleton()->RegisterActorMenuElement()) {
+			if (VRSexMenuManager::GetSingleton()->RegisterActorMenuElement()) {
 				spdlog::info("ActorMenu element registered successfully");
 			} else {
 				spdlog::warn("Failed to register ActorMenu element - ActorMenu may not be available");
 			}
 		} else {
-			spdlog::warn("Failed to initialize MatchmakerMenuManager - 3DUI.dll may not be installed");
+			spdlog::warn("Failed to initialize VRSexMenuManager - 3DUI.dll may not be installed");
 			g_3DUIMissing = true;
 		}
 
@@ -105,13 +105,13 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 	case SKSE::MessagingInterface::kPostLoadGame:
 		// Notify user if VR interactivity is unavailable due to missing dependency
 		if (InputManager::GetSingleton()->IsSkyrimVRToolsMissing()) {
-			RE::DebugNotification("Matchmaker VR: SkyrimVRTools not found - VR interactions disabled");
+			RE::DebugNotification("VR Sex Menu: SkyrimVRTools not found - VR interactions disabled");
 			spdlog::warn("Displayed user notification: SkyrimVRTools missing");
 		}
 
 		// Notify user if 3DUI is missing (deferred from DataLoaded, only show once per session)
 		if (g_3DUIMissing && !g_3DUIMissingNotificationShown) {
-			RE::DebugNotification("Matchmaker VR: Requirement 3DUI is missing, disabling mod functionality");
+			RE::DebugNotification("VR Sex Menu: Requirement 3DUI is missing, disabling mod functionality");
 			spdlog::warn("Displayed user notification: 3DUI missing");
 			g_3DUIMissingNotificationShown = true;
 		}
@@ -120,13 +120,13 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 	case SKSE::MessagingInterface::kNewGame:
 		// Notify user if VR interactivity is unavailable due to missing dependency
 		if (InputManager::GetSingleton()->IsSkyrimVRToolsMissing()) {
-			RE::DebugNotification("Matchmaker VR: SkyrimVRTools not found - VR interactions disabled");
+			RE::DebugNotification("VR Sex Menu: SkyrimVRTools not found - VR interactions disabled");
 			spdlog::warn("Displayed user notification: SkyrimVRTools missing");
 		}
 
 		// Notify user if 3DUI is missing (deferred from DataLoaded, only show once per session)
 		if (g_3DUIMissing && !g_3DUIMissingNotificationShown) {
-			RE::DebugNotification("Matchmaker VR: Requirement 3DUI is missing, disabling mod functionality");
+			RE::DebugNotification("VR Sex Menu: Requirement 3DUI is missing, disabling mod functionality");
 			spdlog::warn("Displayed user notification: 3DUI missing");
 			g_3DUIMissingNotificationShown = true;
 		}
@@ -138,13 +138,13 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
 	SKSE::Init(skse);
 	SetupLog();
 
-	spdlog::info("Matchmaker VR loading...");
+	spdlog::info("VR Sex Menu loading...");
 
 	// Load settings from INI file
 	Settings::GetSingleton()->Load();
 
 	// Initialize INI-backed config storage for MCM
-	Config::ConfigStorage::GetSingleton()->Initialize("MatchmakerVR");
+	Config::ConfigStorage::GetSingleton()->Initialize("VRSexMenu");
 	Config::RegisterConfigOptions();
 
 	// Register SKSE serialization for co-save persistence (thread tracking)
@@ -164,13 +164,13 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
 	// Register Papyrus native functions
 	auto papyrus = SKSE::GetPapyrusInterface();
 	if (papyrus) {
-		papyrus->Register(PapyrusMatchmakerVRApi::Bind);
+		papyrus->Register(PapyrusVRSexMenuApi::Bind);
 		papyrus->Register(Config::PapyrusAdapter::Bind);
 		spdlog::info("Papyrus native functions registered");
 	} else {
 		spdlog::warn("Papyrus interface not available - native API disabled");
 	}
 
-	spdlog::info("Matchmaker VR loaded successfully");
+	spdlog::info("VR Sex Menu loaded successfully");
 	return true;
 }

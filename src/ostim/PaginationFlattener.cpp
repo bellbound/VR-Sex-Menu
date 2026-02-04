@@ -68,11 +68,11 @@ void PaginationFlattener::LoadRules()
     m_loadErrors.clear();
     m_paginationCache.clear();
 
-    // Build path to config file: Data/SKSE/Plugins/Matchmaker/pagination_rules.json
+    // Build path to config file: Data/SKSE/Plugins/VRSexMenu/pagination_rules.json
     char pathBuffer[MAX_PATH];
     GetModuleFileNameA(nullptr, pathBuffer, MAX_PATH);
     std::string exePath(pathBuffer);
-    fs::path configPath = fs::path(exePath).parent_path() / "Data" / "SKSE" / "Plugins" / "Matchmaker" / "pagination_rules.json";
+    fs::path configPath = fs::path(exePath).parent_path() / "Data" / "SKSE" / "Plugins" / "VRSexMenu" / "pagination_rules.json";
 
     spdlog::info("PaginationFlattener: Loading rules from '{}'", configPath.string());
 

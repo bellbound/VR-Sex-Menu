@@ -9,15 +9,15 @@ namespace RE {
     class Actor;
 }
 
-/// Manages the Matchmaker VR menus using 3DUI.
+/// Manages the VR Sex Menu menus using 3DUI.
 /// Coordinates between ActorSelectionMenu and ThreadMenu,
 /// and handles ActorMenu integration for the entry point.
-class MatchmakerMenuManager
+class VRSexMenuManager
 {
 public:
-    static MatchmakerMenuManager* GetSingleton()
+    static VRSexMenuManager* GetSingleton()
     {
-        static MatchmakerMenuManager instance;
+        static VRSexMenuManager instance;
         return &instance;
     }
 
@@ -57,10 +57,10 @@ public:
         void* userData);
 
 private:
-    MatchmakerMenuManager() = default;
-    ~MatchmakerMenuManager() = default;
-    MatchmakerMenuManager(const MatchmakerMenuManager&) = delete;
-    MatchmakerMenuManager& operator=(const MatchmakerMenuManager&) = delete;
+    VRSexMenuManager() = default;
+    ~VRSexMenuManager() = default;
+    VRSexMenuManager(const VRSexMenuManager&) = delete;
+    VRSexMenuManager& operator=(const VRSexMenuManager&) = delete;
 
     /// Show the ActorSelectionMenu (helper for thread validation callback)
     static void ShowActorSelectionMenu(RE::Actor* actor);
@@ -74,7 +74,7 @@ private:
     int32_t m_activeThreadId = -1;
 
     // Element identifiers
-    static constexpr const char* MOD_ID = "MatchmakerVR";
+    static constexpr const char* MOD_ID = "VRSexMenu";
     static constexpr const char* ELEMENT_ID = "start_npc_scene";
-    static constexpr const char* ELEMENT_TEXTURE = "textures\\Matchmaker\\ostim.dds";
+    static constexpr const char* ELEMENT_TEXTURE = "textures\\VRSexMenu\\ostim.dds";
 };

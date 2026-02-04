@@ -1,6 +1,6 @@
 #include "ThreadMenu.h"
 #include "SceneStartManager.h"
-#include "../MatchmakerMenuManager.h"
+#include "../VRSexMenuManager.h"
 #include "../ostim/OstimPapyrusAPI.h"
 #include "../ostim/OstimStandaloneSceneLoader.h"
 #include "../ostim/OstimTranslationLoader.h"
@@ -135,7 +135,7 @@ void ThreadMenu::OnThreadEnded()
     spdlog::info("ThreadMenu: Thread {} ended, showing restart option", m_threadId);
 
     // Restore original outfits for any actors that were undressed
-    auto* undressMgr = Matchmaker::UndressManager::GetSingleton();
+    auto* undressMgr = VRSexMenu::UndressManager::GetSingleton();
     for (auto* actor : m_currentActors) {
         if (actor && undressMgr->HasUndressState(actor)) {
             spdlog::info("ThreadMenu: Restoring outfit for '{}'", actor->GetName());
@@ -181,7 +181,7 @@ void ThreadMenu::OnRestartActivated()
         [](int32_t threadId) {
             if (threadId >= 0) {
                 spdlog::info("ThreadMenu: Scene restarted, new thread {}", threadId);
-                MatchmakerMenuManager::GetSingleton()->OnSceneStarted(threadId);
+                VRSexMenuManager::GetSingleton()->OnSceneStarted(threadId);
             } else {
                 spdlog::error("ThreadMenu: Failed to restart scene");
             }
@@ -197,7 +197,7 @@ bool ThreadMenu::CreateMenu()
     constexpr float rowSpacing = 8.0f;  // Vertical spacing between rows
 
     // Get 3DUI interface
-    m_api = MatchmakerMenuManager::GetSingleton()->GetInterface();
+    m_api = VRSexMenuManager::GetSingleton()->GetInterface();
     if (!m_api) {
         spdlog::error("ThreadMenu: 3DUI interface not available");
         return false;
@@ -205,7 +205,7 @@ bool ThreadMenu::CreateMenu()
 
     // Create root with event handling
     P3DUI::RootConfig rootConfig = P3DUI::RootConfig::Default(
-        "matchmaker_thread_menu", "MatchmakerVR");
+        "vrsexmenu_thread_menu", "VRSexMenu");
     rootConfig.interactive = true;
     rootConfig.eventCallback = &ThreadMenu::OnEvent;
     rootConfig.activationButtonMask = vr::ButtonMaskFromId(vr::k_EButton_SteamVR_Trigger);
@@ -248,7 +248,7 @@ bool ThreadMenu::CreateMenu()
 
         // Stop button (stops scene)
         P3DUI::ElementConfig stopConfig = P3DUI::ElementConfig::Default("stop_button");
-        stopConfig.texturePath = "textures\\Matchmaker\\close.dds";
+        stopConfig.texturePath = "textures\\VRSexMenu\\close.dds";
         stopConfig.scale = 1.02f;  // Match grid element scale
         stopConfig.facingMode = P3DUI::FacingMode::Full;
         stopConfig.tooltip = L"Stop Scene";
@@ -260,7 +260,7 @@ bool ThreadMenu::CreateMenu()
 
         // Undress button (cycles through undress states)
         P3DUI::ElementConfig undressConfig = P3DUI::ElementConfig::Default("mm_undress_button");
-        undressConfig.texturePath = "textures\\Matchmaker\\undress-partial.dds";
+        undressConfig.texturePath = "textures\\VRSexMenu\\undress-partial.dds";
         undressConfig.scale = 1.02f;
         undressConfig.facingMode = P3DUI::FacingMode::Full;
         undressConfig.tooltip = L"Undress Actors";
@@ -284,7 +284,7 @@ bool ThreadMenu::CreateMenu()
 
         // Minimize button
         P3DUI::ElementConfig minimizeConfig = P3DUI::ElementConfig::Default("minimize_button");
-        minimizeConfig.texturePath = "textures\\Matchmaker\\minimize.dds";
+        minimizeConfig.texturePath = "textures\\VRSexMenu\\minimize.dds";
         minimizeConfig.scale = 1.02f;  // Match grid element scale
         minimizeConfig.facingMode = P3DUI::FacingMode::Full;
         minimizeConfig.tooltip = L"Minimize Menu";
@@ -296,7 +296,7 @@ bool ThreadMenu::CreateMenu()
 
         // Restart button (shown when thread ends, hidden initially)
         P3DUI::ElementConfig restartConfig = P3DUI::ElementConfig::Default("restart_button");
-        restartConfig.texturePath = "textures\\Matchmaker\\rewind.dds";
+        restartConfig.texturePath = "textures\\VRSexMenu\\rewind.dds";
         restartConfig.scale = 1.02f;
         restartConfig.facingMode = P3DUI::FacingMode::Full;
         restartConfig.tooltip = L"Restart Scene";
@@ -511,7 +511,7 @@ void ThreadMenu::OnUndressButtonClicked()
         return;
     }
 
-    auto* undressMgr = Matchmaker::UndressManager::GetSingleton();
+    auto* undressMgr = VRSexMenu::UndressManager::GetSingleton();
 
     // Determine the "dominant" state - use the first actor's state to decide action
     // This way clicking cycles all actors through states together
@@ -525,18 +525,18 @@ void ThreadMenu::OnUndressButtonClicked()
         if (!actor) continue;
 
         switch (dominantState) {
-            case Matchmaker::UndressState::Dressed:
+            case VRSexMenu::UndressState::Dressed:
             default:
                 spdlog::info("  - Partial undress '{}'", actor->GetName());
                 undressMgr->UndressPartial(actor);
                 break;
 
-            case Matchmaker::UndressState::PartiallyUndressed:
+            case VRSexMenu::UndressState::PartiallyUndressed:
                 spdlog::info("  - Full undress '{}'", actor->GetName());
                 undressMgr->UndressFull(actor);
                 break;
 
-            case Matchmaker::UndressState::FullyUndressed:
+            case VRSexMenu::UndressState::FullyUndressed:
                 spdlog::info("  - Re-dress '{}'", actor->GetName());
                 undressMgr->Redress(actor);
                 break;
@@ -551,25 +551,25 @@ void ThreadMenu::RefreshUndressButton()
 {
     if (!m_undressButton || m_currentActors.empty()) return;
 
-    auto* undressMgr = Matchmaker::UndressManager::GetSingleton();
+    auto* undressMgr = VRSexMenu::UndressManager::GetSingleton();
 
     // Use first actor's state to determine button appearance
     auto state = undressMgr->GetUndressState(m_currentActors[0]);
 
     switch (state) {
-        case Matchmaker::UndressState::Dressed:
+        case VRSexMenu::UndressState::Dressed:
         default:
-            m_undressButton->SetTexture("textures\\Matchmaker\\undress-partial.dds");
+            m_undressButton->SetTexture("textures\\VRSexMenu\\undress-partial.dds");
             m_undressButton->SetTooltip(L"Undress Armor");
             break;
 
-        case Matchmaker::UndressState::PartiallyUndressed:
-            m_undressButton->SetTexture("textures\\Matchmaker\\undress-full.dds");
+        case VRSexMenu::UndressState::PartiallyUndressed:
+            m_undressButton->SetTexture("textures\\VRSexMenu\\undress-full.dds");
             m_undressButton->SetTooltip(L"Undress Fully");
             break;
 
-        case Matchmaker::UndressState::FullyUndressed:
-            m_undressButton->SetTexture("textures\\Matchmaker\\redress-full.dds");
+        case VRSexMenu::UndressState::FullyUndressed:
+            m_undressButton->SetTexture("textures\\VRSexMenu\\redress-full.dds");
             m_undressButton->SetTooltip(L"Re-dress");
             break;
     }
@@ -599,8 +599,8 @@ void ThreadMenu::SetMinimized(bool minimized)
     // Update minimize button icon based on state (stays visible)
     if (m_minimizeButton) {
         m_minimizeButton->SetTexture(minimized
-            ? "textures\\Matchmaker\\minimize_highlight.dds"
-            : "textures\\Matchmaker\\minimize.dds");
+            ? "textures\\VRSexMenu\\minimize_highlight.dds"
+            : "textures\\VRSexMenu\\minimize.dds");
         m_minimizeButton->SetTooltip(minimized ? L"Restore Menu" : L"Minimize Menu");
     }
 

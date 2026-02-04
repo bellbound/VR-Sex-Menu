@@ -10,7 +10,7 @@ namespace Options {
     // [General] Section
     // ==========================================================================
 
-    /// Master toggle for all Matchmaker VR functionality.
+    /// Master toggle for all VR Sex Menu functionality.
     /// Type: bool (int 0/1), Default: 1 (enabled)
     constexpr std::string_view kModEnabled = "General:bModEnabled";
 
@@ -22,7 +22,7 @@ namespace Options {
     // [Controls] Section
     // ==========================================================================
 
-    /// VR controller button to open the Matchmaker menu for nearby OStim scenes.
+    /// VR controller button to open the VR Sex Menu for nearby OStim scenes.
     /// Type: select, Options: "None", "A", "B", "Right Thumbstick", "Left Thumbstick"
     /// Default: "None"
     constexpr std::string_view kHotkeyButton = "Controls:sHotkeyButton";
@@ -58,7 +58,7 @@ bool IsHiggsInstalled();
 // [General]
 // ============================================================================
 
-/// Master toggle for all Matchmaker VR functionality.
+/// Master toggle for all VR Sex Menu functionality.
 inline bool IsModEnabled()
 {
     return ConfigStorage::GetSingleton()->GetInt(Options::kModEnabled, 1) != 0;

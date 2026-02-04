@@ -41,7 +41,7 @@ bool OstimThreadBuilderInterface::Create(
     }
 
     // Create async callback
-    auto callbackImpl = RE::make_smart<Matchmaker::AsyncIntCallbackFunctor>(
+    auto callbackImpl = RE::make_smart<VRSexMenu::AsyncIntCallbackFunctor>(
         [callback](int32_t builderId) {
             spdlog::info("OstimThreadBuilderInterface::Create: Builder ID = {}", builderId);
             if (callback) callback(builderId);
@@ -300,7 +300,7 @@ bool OstimThreadBuilderInterface::Start(int32_t builderId, IntCallback callback)
     }
 
     // Create async callback
-    auto callbackImpl = RE::make_smart<Matchmaker::AsyncIntCallbackFunctor>(
+    auto callbackImpl = RE::make_smart<VRSexMenu::AsyncIntCallbackFunctor>(
         [callback](int32_t threadId) {
             spdlog::info("OstimThreadBuilderInterface::Start: Thread ID = {}", threadId);
             if (callback) callback(threadId);

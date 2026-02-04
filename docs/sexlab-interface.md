@@ -1,6 +1,6 @@
-# SexLab Integration Guide for MatchmakerVR
+# SexLab Integration Guide for VRSexMenu
 
-This document outlines how to integrate SexLab Framework SE alongside the existing OStim Standalone support in MatchmakerVR.
+This document outlines how to integrate SexLab Framework SE alongside the existing OStim Standalone support in VRSexMenu.
 
 ## Table of Contents
 1. [Architecture Comparison](#architecture-comparison)
@@ -46,7 +46,7 @@ This document outlines how to integrate SexLab Framework SE alongside the existi
 
 ### OStim Thread Events (C++ Native)
 
-MatchmakerVR currently uses these OStim interfaces:
+VRSexMenu currently uses these OStim interfaces:
 
 ```cpp
 // From OstimThreadInterface.h
@@ -79,23 +79,23 @@ Set a hook name when starting animation, receive events for that specific thread
 
 ```papyrus
 ; Start with custom hook
-int tid = SexLab.StartSex(Positions, Anims, none, none, true, "MatchmakerHook")
+int tid = SexLab.StartSex(Positions, Anims, none, none, true, "VRSexMenuHook")
 
 ; Register for events
-RegisterForModEvent("HookMatchmakerHook_AnimationStart", "OnAnimStart")
-RegisterForModEvent("HookMatchmakerHook_AnimationEnd", "OnAnimEnd")
-RegisterForModEvent("HookMatchmakerHook_StageStart", "OnStageStart")
-RegisterForModEvent("HookMatchmakerHook_OrgasmStart", "OnOrgasm")
+RegisterForModEvent("HookVRSexMenuHook_AnimationStart", "OnAnimStart")
+RegisterForModEvent("HookVRSexMenuHook_AnimationEnd", "OnAnimEnd")
+RegisterForModEvent("HookVRSexMenuHook_StageStart", "OnStageStart")
+RegisterForModEvent("HookVRSexMenuHook_OrgasmStart", "OnOrgasm")
 ```
 
 #### Option B: Tracked Actor Events
 Track specific actors and receive events whenever they're in any animation:
 
 ```papyrus
-SexLab.TrackActor(PlayerRef, "MatchmakerPlayer")
-RegisterForModEvent("MatchmakerPlayer_Start", "OnPlayerAnimStart")
-RegisterForModEvent("MatchmakerPlayer_End", "OnPlayerAnimEnd")
-RegisterForModEvent("MatchmakerPlayer_Orgasm", "OnPlayerOrgasm")
+SexLab.TrackActor(PlayerRef, "VRSexMenuPlayer")
+RegisterForModEvent("VRSexMenuPlayer_Start", "OnPlayerAnimStart")
+RegisterForModEvent("VRSexMenuPlayer_End", "OnPlayerAnimEnd")
+RegisterForModEvent("VRSexMenuPlayer_Orgasm", "OnPlayerOrgasm")
 ```
 
 ### Event Equivalence Table
@@ -134,7 +134,7 @@ RegisterForModEvent("MatchmakerPlayer_Orgasm", "OnPlayerOrgasm")
 
 ### OStim Approach (Current Implementation)
 
-MatchmakerVR uses `OstimThreadBuilderInterface` which dispatches to Papyrus:
+VRSexMenu uses `OstimThreadBuilderInterface` which dispatches to Papyrus:
 
 ```cpp
 // SceneStartManager.cpp
@@ -171,7 +171,7 @@ sslThreadController Thread = SexLab.QuickStart(Actor1, Actor2, none, none, none,
 
 ### C++ Integration Strategy
 
-Since SexLab has no C++ interface, MatchmakerVR needs a **Papyrus bridge**:
+Since SexLab has no C++ interface, VRSexMenu needs a **Papyrus bridge**:
 
 ```cpp
 // SexLabThreadInterface.h (proposed)
@@ -198,8 +198,8 @@ public:
 
 **Implementation would dispatch to a helper Papyrus script:**
 ```papyrus
-; MatchmakerSexLabBridge.psc
-Scriptname MatchmakerSexLabBridge
+; VRSexMenu_SexlabBridge.psc
+Scriptname VRSexMenu_SexlabBridge
 
 Function StartAnimationWithTags(Actor[] Positions, String Tags, String Hook) Global
     SexLabFramework SexLab = SexLabUtil.GetAPI()
@@ -215,7 +215,7 @@ EndFunction
 
 ### OStim: Scene JSON Files
 
-MatchmakerVR loads all scene JSON files at startup:
+VRSexMenu loads all scene JSON files at startup:
 
 ```cpp
 // OstimStandaloneSceneLoader.cpp
@@ -343,7 +343,7 @@ int result = SexLab.ValidateActor(ActorRef)
 
 ### Gender Mapping
 
-| MatchmakerVR | OStim | SexLab |
+| VRSexMenu | OStim | SexLab |
 |--------------|-------|--------|
 | Male | `intendedSex: "male"` | Gender 0, type "Male" |
 | Female | `intendedSex: "female"` | Gender 1, type "Female" |
@@ -473,7 +473,7 @@ public:
 ## Implementation Recommendations
 
 ### Phase 1: Core Integration
-1. **Create SexLab Papyrus bridge script** (`MatchmakerSexLabBridge.psc`)
+1. **Create SexLab Papyrus bridge script** (`VRSexMenu_SexlabBridge.psc`)
    - Wrap SexLab API calls
    - Handle event registration
    - Provide callbacks to C++
@@ -518,7 +518,7 @@ public:
 ### File Structure (Proposed)
 
 ```
-skse/matchmaker-vr/src/
+skse/VR-Sex-Menu/src/
 ├── ostim/                          # Existing
 │   ├── OstimThreadInterface.h/cpp
 │   ├── OstimStandaloneSceneLoader.h/cpp
@@ -532,15 +532,15 @@ skse/matchmaker-vr/src/
     ├── SceneStartManager.h/cpp     # Existing
     └── SexLabMenu.h/cpp            # New
 
-papyrus/mods/MatchmakerVR/Scripts/Source/
-└── MatchmakerSexLabBridge.psc      # New Papyrus bridge
+papyrus/mods/VRSexMenu/Scripts/Source/
+└── VRSexMenu_SexlabBridge.psc      # New Papyrus bridge
 ```
 
 ---
 
 ## Summary: Key Differences
 
-| Aspect | OStim | SexLab | MatchmakerVR Approach |
+| Aspect | OStim | SexLab | VRSexMenu Approach |
 |--------|-------|--------|----------------------|
 | API | C++ native + Papyrus | Papyrus only | Create C++ wrapper for Papyrus calls |
 | Animation data | Scene JSON files | SLAL JSON + runtime slots | Read SLAL JSON at startup |

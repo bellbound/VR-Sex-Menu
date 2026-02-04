@@ -1,22 +1,22 @@
 
 Sexlab specific stuff goes in 
 src/sexlab:
-- SexlabPapyrusAPI: Similar to the skse\matchmaker-vr\src\ostim\OstimPapyrusAPI.cpp. Lets us call the relevant API papyrus scripts from cpp.
+- SexlabPapyrusAPI: Similar to the skse\VR-Sex-Menu\src\ostim\OstimPapyrusAPI.cpp. Lets us call the relevant API papyrus scripts from cpp.
 - SexlabSceneStart manager: Equivalent to the ostim one
 - SexlabSceneTracker: Takes in scene event cb's from papyrus & re-dispatches them in our code. This acts as an abstraction over the fact that we can only track specific Sexlab Scenes, and not all, as with ostim. Consumers need not know that they dont have all sexlab anims. Receives events from SexlabBridge
 - SexlabPapyrusInterface: Similar 
-- papyrus\mods\MatchmakerVR\Scripts\Source\MatchmakerVR_SexlabListener.psc
-    - Quest Script, that registers for mod events for sl events and dispatches them to MatchmakerVR_SexlabBridge
+- papyrus\mods\VRSexMenu\Scripts\Source\VRSexMenu_SexlabListener.psc
+    - Quest Script, that registers for mod events for sl events and dispatches them to VRSexMenu_SexlabBridge
     - For now we only track: By actor (player) & all scenes started through SexlabSceneStart
-- papyrus\mods\MatchmakerVR\Scripts\Source\MatchmakerVR_SexlabBridge.psc
+- papyrus\mods\VRSexMenu\Scripts\Source\VRSexMenu_SexlabBridge.psc
   - Native script, containing bound functions like NotifyAnimStart(tid, ...) ...
-- skse\matchmaker-vr\src\config\ConfigOptions.h
+- skse\VR-Sex-Menu\src\config\ConfigOptions.h
     - New Section [Sexlab]
     - Enable Sexlab Integration: True by default (sexlab detection handled in papyrus later)
 - SexlabSceneLoader: read SLAL JSON files to build an animation registry
     - Has an id, that we assign based on filename+index of the animation in the anims array
     - Json files located in SLAnims\json\{slalpackName}_{animpackCategory}.json (eg. Billyy_CreatureHumanoids, AnimationsByLeito_Aggressive)
-    - skse\matchmaker-vr\docs\slal-schema.json contains the schema of the json files. 
+    - skse\VR-Sex-Menu\docs\slal-schema.json contains the schema of the json files. 
     - Enumerate the files, like with the ostim equivalent and build a strongly typed registry. Store as a list of objects, 'select many' of slalPack.animations
         - Store animPack (slalPack.name Billyy_CreatureFurniture), animPackDisplayName (slalPack.name but _ replaced with space)
         - Values for actors.type: CreatureFemale, CreatureMale, Male, Female. 

@@ -7,7 +7,7 @@
 
 namespace Config {
 
-/// Papyrus adapter - bridges MatchmakerVR_Config.psc to ConfigStorage singleton.
+/// Papyrus adapter - bridges VRSexMenu_Config.psc to ConfigStorage singleton.
 /// All functions take StaticFunctionTag* as first param (required for global native functions).
 ///
 /// Note: RegisterSelectOptions is NOT exposed to Papyrus - options are defined in C++ only.
@@ -138,7 +138,7 @@ namespace PapyrusAdapter {
             return false;
         }
 
-        constexpr auto scriptName = "MatchmakerVR_Config"sv;
+        constexpr auto scriptName = "VRSexMenu_Config"sv;
 
         // Int functions
         a_vm->RegisterFunction("GetIntValue"sv, scriptName, GetIntValue);

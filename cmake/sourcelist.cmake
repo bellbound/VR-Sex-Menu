@@ -2,7 +2,7 @@ set(sources ${sources}
     src/plugin.cpp
     src/InputManager.cpp
     src/MenuChecker.cpp
-    src/MatchmakerMenuManager.cpp
+    src/VRSexMenuManager.cpp
     src/api/ThreeDUIInterface001.cpp
     src/config/ConfigStorage.cpp
     src/config/ConfigOptions.cpp
@@ -23,18 +23,7 @@ set(sources ${sources}
     src/menu/ThreadMenu.cpp
     src/menu/ActorActivationHandler.cpp
     src/menu/ThreadMenuHotkeyManager.cpp
-    src/menu/SexlabThreadMenu.cpp
     src/util/MessageBoxUtil.cpp
     src/papyrus/PapyrusInterface.cpp
-    src/sexlab/SexlabSceneTracker.cpp
-    src/sexlab/SexlabSceneLoader.cpp
-    src/sexlab/SexlabPapyrusInterface.cpp
-    src/sexlab/SexlabPapyrusAPI.cpp
-    src/sexlab/SexlabCreatureRaceMapper.cpp
-    src/sexlab/CategoryRepository.cpp
-    src/sexlab/SexlabCategoryFilter.cpp
-    src/sexlab/SexlabIconResolver.cpp
-    src/sexlab/SexlabSceneFilter.cpp
-    src/sexlab/SexlabSceneStartManager.cpp
     external/PapyrusVRTypes.cpp
 )

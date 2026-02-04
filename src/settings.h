@@ -16,11 +16,11 @@ public:
     // Load settings from INI file
     void Load()
     {
-        // Build INI path: Data\SKSE\Plugins\MatchmakerVR.ini
+        // Build INI path: Data\SKSE\Plugins\VRSexMenu.ini
         char pathBuffer[MAX_PATH];
         GetModuleFileNameA(nullptr, pathBuffer, MAX_PATH);
         std::string exePath(pathBuffer);
-        std::string dataPath = exePath.substr(0, exePath.rfind('\\')) + "\\Data\\SKSE\\Plugins\\MatchmakerVR.ini";
+        std::string dataPath = exePath.substr(0, exePath.rfind('\\')) + "\\Data\\SKSE\\Plugins\\VRSexMenu.ini";
         m_iniPath = dataPath;
 
         spdlog::info("Settings: Loading from '{}'", m_iniPath);

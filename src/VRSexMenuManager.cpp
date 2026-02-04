@@ -1,4 +1,4 @@
-#include "MatchmakerMenuManager.h"
+#include "VRSexMenuManager.h"
 #include "config/ConfigOptions.h"
 #include "menu/UIExtActorSelector.h"
 #include "menu/SceneStartManager.h"
@@ -11,7 +11,7 @@
 
 // === Core Initialization ===
 
-bool MatchmakerMenuManager::Initialize()
+bool VRSexMenuManager::Initialize()
 {
     if (m_initialized) {
         return true;
@@ -19,11 +19,11 @@ bool MatchmakerMenuManager::Initialize()
 
     m_interface = P3DUI::GetInterface001();
     if (!m_interface) {
-        spdlog::warn("MatchmakerMenuManager: Failed to get 3DUI interface");
+        spdlog::warn("VRSexMenuManager: Failed to get 3DUI interface");
         return false;
     }
 
-    spdlog::info("MatchmakerMenuManager: Got 3DUI interface v{} build {}",
+    spdlog::info("VRSexMenuManager: Got 3DUI interface v{} build {}",
         m_interface->GetInterfaceVersion(),
         m_interface->GetBuildNumber());
 
@@ -31,21 +31,21 @@ bool MatchmakerMenuManager::Initialize()
     return true;
 }
 
-bool MatchmakerMenuManager::RegisterActorMenuElement()
+bool VRSexMenuManager::RegisterActorMenuElement()
 {
     if (m_actorMenuRegistered) {
         return true;
     }
 
     if (!m_initialized) {
-        spdlog::error("MatchmakerMenuManager: Cannot register ActorMenu element - not initialized");
+        spdlog::error("VRSexMenuManager: Cannot register ActorMenu element - not initialized");
         return false;
     }
 
     // Get the ActorMenu interface
     m_actorMenu = P3DUI::GetActorMenuInterface();
     if (!m_actorMenu) {
-        spdlog::warn("MatchmakerMenuManager: ActorMenu interface not available");
+        spdlog::warn("VRSexMenuManager: ActorMenu interface not available");
         return false;
     }
 
@@ -57,10 +57,10 @@ bool MatchmakerMenuManager::RegisterActorMenuElement()
     config.scale = 1.2f;
 
     // Get callback addresses for diagnostic logging
-    auto eligibilityCallback = &MatchmakerMenuManager::IsEligibleForNPCScene;
-    auto activationCallback = &MatchmakerMenuManager::OnNPCSceneActivated;
+    auto eligibilityCallback = &VRSexMenuManager::IsEligibleForNPCScene;
+    auto activationCallback = &VRSexMenuManager::OnNPCSceneActivated;
 
-    spdlog::info("MatchmakerMenuManager: Registering callbacks - eligibility={}, activation={}, userData={}",
+    spdlog::info("VRSexMenuManager: Registering callbacks - eligibility={}, activation={}, userData={}",
         reinterpret_cast<void*>(eligibilityCallback),
         reinterpret_cast<void*>(activationCallback),
         static_cast<void*>(this));
@@ -74,9 +74,9 @@ bool MatchmakerMenuManager::RegisterActorMenuElement()
 
     if (success) {
         m_actorMenuRegistered = true;
-        spdlog::info("MatchmakerMenuManager: Registered ActorMenu element '{}'", ELEMENT_ID);
+        spdlog::info("VRSexMenuManager: Registered ActorMenu element '{}'", ELEMENT_ID);
     } else {
-        spdlog::error("MatchmakerMenuManager: Failed to register ActorMenu element");
+        spdlog::error("VRSexMenuManager: Failed to register ActorMenu element");
     }
 
     return success;
@@ -84,7 +84,7 @@ bool MatchmakerMenuManager::RegisterActorMenuElement()
 
 // === ActorMenu Callbacks ===
 
-bool MatchmakerMenuManager::IsEligibleForNPCScene(RE::Actor* actor, void* /*userData*/)
+bool VRSexMenuManager::IsEligibleForNPCScene(RE::Actor* actor, void* /*userData*/)
 {
     // Check master mod toggle and feature toggle
     if (!Config::IsModEnabled() || !Config::IsGrabNpcTriggerEnabled()) {
@@ -99,7 +99,7 @@ bool MatchmakerMenuManager::IsEligibleForNPCScene(RE::Actor* actor, void* /*user
     return true;
 }
 
-void MatchmakerMenuManager::OnNPCSceneActivated(
+void VRSexMenuManager::OnNPCSceneActivated(
     RE::Actor* actor,
     const char* modId,
     const char* elementId,
@@ -109,7 +109,7 @@ void MatchmakerMenuManager::OnNPCSceneActivated(
     GetSingleton()->HideAllMenus();
 
     // Defensive logging to catch any issues
-    spdlog::info("MatchmakerMenuManager::OnNPCSceneActivated ENTRY - modId={}, elementId={}, userData={}, actor={}",
+    spdlog::info("VRSexMenuManager::OnNPCSceneActivated ENTRY - modId={}, elementId={}, userData={}, actor={}",
         modId ? modId : "null",
         elementId ? elementId : "null",
         userData ? "valid" : "null",
@@ -125,10 +125,10 @@ void MatchmakerMenuManager::OnNPCSceneActivated(
         }
     }
 
-    spdlog::info("MatchmakerMenuManager: NPC Scene activated for '{}'", actorName);
+    spdlog::info("VRSexMenuManager: NPC Scene activated for '{}'", actorName);
 
     if (!actor) {
-        spdlog::warn("MatchmakerMenuManager: Actor is null, aborting");
+        spdlog::warn("VRSexMenuManager: Actor is null, aborting");
         return;
     }
 
@@ -138,7 +138,7 @@ void MatchmakerMenuManager::OnNPCSceneActivated(
 
     if (existingThread.has_value()) {
         int32_t threadId = existingThread.value();
-        spdlog::info("MatchmakerMenuManager: Actor '{}' is in active thread {}, showing ThreadMenu",
+        spdlog::info("VRSexMenuManager: Actor '{}' is in active thread {}, showing ThreadMenu",
             actorName, threadId);
 
         // Get menu position relative to player
@@ -157,39 +157,39 @@ void MatchmakerMenuManager::OnNPCSceneActivated(
     }
 }
 
-void MatchmakerMenuManager::ShowActorSelectionMenu(RE::Actor* actor)
+void VRSexMenuManager::ShowActorSelectionMenu(RE::Actor* actor)
 {
-    spdlog::info("MatchmakerMenuManager: Starting UIExtActorSelector flow...");
+    spdlog::info("VRSexMenuManager: Starting UIExtActorSelector flow...");
 
     UIExtActorSelector::GetSingleton()->ShowActorSelection(actor,
         [](std::vector<RE::Actor*> selectedActors) {
             if (selectedActors.empty()) {
-                spdlog::info("MatchmakerMenuManager: Actor selection cancelled");
+                spdlog::info("VRSexMenuManager: Actor selection cancelled");
                 return;
             }
 
-            spdlog::info("MatchmakerMenuManager: {} actors selected, starting scene...",
+            spdlog::info("VRSexMenuManager: {} actors selected, starting scene...",
                 selectedActors.size());
 
             // Start scene via SceneStartManager (uses OstimThreadBuilderInterface)
             SceneStartManager::GetSingleton()->StartScene(selectedActors,
                 [](int32_t threadId) {
                     if (threadId >= 0) {
-                        MatchmakerMenuManager::GetSingleton()->OnSceneStarted(threadId);
+                        VRSexMenuManager::GetSingleton()->OnSceneStarted(threadId);
                     } else {
-                        spdlog::error("MatchmakerMenuManager: Scene start failed");
+                        spdlog::error("VRSexMenuManager: Scene start failed");
                     }
                 });
         });
 
-    spdlog::info("MatchmakerMenuManager: UIExtActorSelector::ShowActorSelection() dispatched");
+    spdlog::info("VRSexMenuManager: UIExtActorSelector::ShowActorSelection() dispatched");
 }
 
 // === Scene Lifecycle ===
 
-void MatchmakerMenuManager::OnSceneStarted(int32_t threadId)
+void VRSexMenuManager::OnSceneStarted(int32_t threadId)
 {
-    spdlog::info("MatchmakerMenuManager: Scene started, thread {}", threadId);
+    spdlog::info("VRSexMenuManager: Scene started, thread {}", threadId);
     m_activeThreadId = threadId;
 
     // Position menu relative to player
@@ -206,9 +206,9 @@ void MatchmakerMenuManager::OnSceneStarted(int32_t threadId)
     }
 }
 
-void MatchmakerMenuManager::OnSceneEnded(int32_t threadId)
+void VRSexMenuManager::OnSceneEnded(int32_t threadId)
 {
-    spdlog::info("MatchmakerMenuManager: Scene ended, thread {}", threadId);
+    spdlog::info("VRSexMenuManager: Scene ended, thread {}", threadId);
 
     // Remove from persistent storage
     Persistence::ThreadStorageManager::GetSingleton()->RemoveThread(threadId);
@@ -224,7 +224,7 @@ void MatchmakerMenuManager::OnSceneEnded(int32_t threadId)
     }
 }
 
-void MatchmakerMenuManager::HideAllMenus()
+void VRSexMenuManager::HideAllMenus()
 {
     // Hide all menus opened by this mod
     auto* threadMenu = ThreadMenu::GetSingleton();

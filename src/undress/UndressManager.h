@@ -7,7 +7,7 @@
 #include <mutex>
 #include <spdlog/spdlog.h>
 
-namespace Matchmaker
+namespace VRSexMenu
 {
     // State of undress for an actor
     enum class UndressState : uint8_t
@@ -326,4 +326,4 @@ namespace Matchmaker
         mutable std::mutex m_mutex;
     };
 
-}  // namespace Matchmaker
+}  // namespace VRSexMenu

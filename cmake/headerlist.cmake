@@ -4,7 +4,7 @@ set(headers ${headers}
     src/settings.h
     src/InputManager.h
     src/MenuChecker.h
-    src/MatchmakerMenuManager.h
+    src/VRSexMenuManager.h
     src/api/ThreeDUIInterface001.h
     src/api/ThreeDUIActorMenu.h
     src/config/ConfigStorage.h
@@ -27,19 +27,8 @@ set(headers ${headers}
     src/menu/ThreadMenu.h
     src/menu/ActorActivationHandler.h
     src/menu/ThreadMenuHotkeyManager.h
-    src/menu/SexlabThreadMenu.h
     src/papyrus/PapyrusInterface.h
-    src/papyrus/PapyrusMatchmakerVRApi.h
-    src/sexlab/SexlabSceneTracker.h
-    src/sexlab/SexlabSceneLoader.h
-    src/sexlab/SexlabPapyrusInterface.h
-    src/sexlab/SexlabPapyrusAPI.h
-    src/sexlab/SexlabCreatureRaceMapper.h
-    src/sexlab/CategoryRepository.h
-    src/sexlab/SexlabCategoryFilter.h
-    src/sexlab/SexlabIconResolver.h
-    src/sexlab/SexlabSceneFilter.h
-    src/sexlab/SexlabSceneStartManager.h
+    src/papyrus/PapyrusVRSexMenuApi.h
     external/VRManagerAPI.h
     external/PapyrusVRTypes.h
     external/VRHookAPI.h

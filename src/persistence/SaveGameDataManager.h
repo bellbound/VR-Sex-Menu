@@ -7,7 +7,7 @@ namespace Persistence {
 /// Handles SKSE serialization callbacks for ThreadStorageManager.
 ///
 /// Data Format (binary, SKSE cosave):
-/// - Record type: 'MMVR' (MatchmakerVR)
+/// - Record type: 'MMVR' (VRSexMenu)
 /// - Version: 1
 /// - Content: Thread storage data
 class SaveGameDataManager {
@@ -35,7 +35,7 @@ private:
     static bool WriteString(SKSE::SerializationInterface* intfc, const std::string& str);
     static bool ReadString(SKSE::SerializationInterface* intfc, std::string& str);
 
-    // Record type: 'MMVR' (MatchmakerVR) - reversed for little-endian
+    // Record type: 'MMVR' (VRSexMenu) - reversed for little-endian
     static constexpr uint32_t kRecordType = 'RVMM';
     static constexpr uint32_t kDataVersion = 1;
 

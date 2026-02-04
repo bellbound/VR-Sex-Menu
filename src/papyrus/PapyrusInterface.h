@@ -10,7 +10,7 @@
 #include <condition_variable>
 #include <chrono>
 
-namespace Matchmaker {
+namespace VRSexMenu {
 
     // Type-safe variant for Papyrus values we need
     using PapyrusValue = std::variant<

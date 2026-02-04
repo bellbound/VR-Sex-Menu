@@ -7,7 +7,7 @@
 #undef GetObject
 #endif
 
-namespace Matchmaker {
+namespace VRSexMenu {
 
     RE::BSScript::Internal::VirtualMachine* PapyrusInterface::GetVM() {
         return RE::BSScript::Internal::VirtualMachine::GetSingleton();

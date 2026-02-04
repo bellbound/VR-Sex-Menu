@@ -10,7 +10,7 @@
 namespace Config {
 
 /// Thread-safe INI-backed configuration storage.
-/// Usable directly from C++ or via Papyrus native functions (MatchmakerVR_Config.psc).
+/// Usable directly from C++ or via Papyrus native functions (VRSexMenu_Config.psc).
 ///
 /// INI File: Data\SKSE\Plugins\<ModName>\<ModName>_config.ini
 /// Sections: Values are stored in [General] section, or custom sections via qualified names "Section:Key"
@@ -23,7 +23,7 @@ public:
 
     /// Initialize with mod name. Must be called once at plugin load.
     /// Creates directory structure if needed.
-    /// @param modName - Name used for folder and INI file (e.g., "MatchmakerVR")
+    /// @param modName - Name used for folder and INI file (e.g., "VRSexMenu")
     void Initialize(std::string_view modName);
 
     bool IsInitialized() const { return m_initialized; }

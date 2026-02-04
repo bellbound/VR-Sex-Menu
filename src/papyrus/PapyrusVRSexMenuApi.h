@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../MatchmakerMenuManager.h"
+#include "../VRSexMenuManager.h"
 #include "../menu/UIExtActorSelector.h"
 #include "../menu/SceneStartManager.h"
 #include "../persistence/ThreadStorageManager.h"
@@ -8,7 +8,7 @@
 #include <RE/Skyrim.h>
 #include <spdlog/spdlog.h>
 
-namespace PapyrusMatchmakerVRApi {
+namespace PapyrusVRSexMenuApi {
     using VM = RE::BSScript::IVirtualMachine;
 
     /// Open the actor selection menu with the given actors pre-selected.
@@ -25,7 +25,7 @@ namespace PapyrusMatchmakerVRApi {
         RE::StaticFunctionTag*,
         std::vector<RE::Actor*> actors)
     {
-        spdlog::info("MatchmakerVRApi::QuickStart called with {} actors", actors.size());
+        spdlog::info("VRSexMenuApi::QuickStart called with {} actors", actors.size());
 
         // Filter null actors
         std::vector<RE::Actor*> validActors;
@@ -36,26 +36,26 @@ namespace PapyrusMatchmakerVRApi {
             }
         }
 
-        spdlog::info("MatchmakerVRApi::QuickStart: {} valid actors after filtering", validActors.size());
+        spdlog::info("VRSexMenuApi::QuickStart: {} valid actors after filtering", validActors.size());
 
         // Show actor selection with pre-selected actors (same flow as ActorMenu)
         UIExtActorSelector::GetSingleton()->ShowActorSelection(validActors,
             [](std::vector<RE::Actor*> selectedActors) {
                 if (selectedActors.empty()) {
-                    spdlog::info("MatchmakerVRApi::QuickStart: Actor selection cancelled");
+                    spdlog::info("VRSexMenuApi::QuickStart: Actor selection cancelled");
                     return;
                 }
 
-                spdlog::info("MatchmakerVRApi::QuickStart: {} actors selected, starting scene...",
+                spdlog::info("VRSexMenuApi::QuickStart: {} actors selected, starting scene...",
                     selectedActors.size());
 
                 // Start scene via SceneStartManager (same as ActorMenu flow)
                 SceneStartManager::GetSingleton()->StartScene(selectedActors,
                     [](int32_t threadId) {
                         if (threadId >= 0) {
-                            MatchmakerMenuManager::GetSingleton()->OnSceneStarted(threadId);
+                            VRSexMenuManager::GetSingleton()->OnSceneStarted(threadId);
                         } else {
-                            spdlog::error("MatchmakerVRApi::QuickStart: Scene start failed");
+                            spdlog::error("VRSexMenuApi::QuickStart: Scene start failed");
                         }
                     });
             });
@@ -70,20 +70,20 @@ namespace PapyrusMatchmakerVRApi {
         return Config::IsHiggsInstalled();
     }
 
-    /// Bind all MatchmakerVRApi native functions to the VM.
+    /// Bind all VRSexMenuApi native functions to the VM.
     inline bool Bind(VM* a_vm)
     {
         if (!a_vm) {
-            spdlog::error("PapyrusMatchmakerVR_Api::Bind: VM is null");
+            spdlog::error("PapyrusVRSexMenu_Api::Bind: VM is null");
             return false;
         }
 
-        const auto scriptName = "MatchmakerVR_Api"sv;
+        const auto scriptName = "VRSexMenu_Api"sv;
 
         a_vm->RegisterFunction("QuickStart"sv, scriptName, QuickStart);
         a_vm->RegisterFunction("IsHiggsInstalled"sv, scriptName, IsHiggsInstalled);
 
-        spdlog::info("PapyrusMatchmakerVRApi: Registered native functions for '{}'", scriptName);
+        spdlog::info("PapyrusVRSexMenuApi: Registered native functions for '{}'", scriptName);
 
         return true;
     }

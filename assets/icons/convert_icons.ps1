@@ -5,7 +5,7 @@
 # 4. Copy DDS to mod texture folder
 
 param(
-    [string]$ModTextureDir = "C:\games\skyrim\VRDEV\mods\MatchmakerVR\textures\3DUI\icons"
+    [string]$ModTextureDir = "C:\games\skyrim\VRDEV\mods\VRSexMenu\textures\3DUI\icons"
 )
 
 $ErrorActionPreference = "Stop"

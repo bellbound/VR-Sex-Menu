@@ -1,6 +1,6 @@
 # SexLab Integration Implementation Plan
 
-This document outlines the architecture and implementation tasks for adding SexLab Framework support to MatchmakerVR.
+This document outlines the architecture and implementation tasks for adding SexLab Framework support to VRSexMenu.
 
 ## Architecture Overview
 
@@ -40,7 +40,7 @@ This document outlines the architecture and implementation tasks for adding SexL
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌──────────────────────────┐    ┌──────────────────────────┐              │
-│  │ MatchmakerVR_SexlabBridge│◄───│MatchmakerVR_SexlabListener│              │
+│  │ VRSexMenu_SexlabBridge│◄───│VRSexMenu_SexlabListener│              │
 │  │     (Native script)      │    │    (ModEvent handler)    │              │
 │  │                          │    │                          │              │
 │  │  - NotifyAnimStart()     │    │  - RegisterForModEvent() │              │
@@ -77,7 +77,7 @@ public:
     using BoolCallback = std::function<void(bool)>;
 
     /// Start animation with specific animation ID.
-    /// Dispatches to MatchmakerVR_SexlabBridge.StartAnimation()
+    /// Dispatches to VRSexMenu_SexlabBridge.StartAnimation()
     /// @param actors Actors to include (max 5)
     /// @param animationId SLAL animation ID (e.g., "B_B_FMast1")
     /// @param callback Invoked with thread ID (-1 on failure)
@@ -182,7 +182,7 @@ namespace SexlabPapyrusInterface {
     /// Register native functions with SKSE. Called during plugin load.
     bool Register(RE::BSScript::IVirtualMachine* vm);
 
-    // Native functions (called from MatchmakerVR_SexlabBridge.psc)
+    // Native functions (called from VRSexMenu_SexlabBridge.psc)
 
     /// Called when a tracked animation starts.
     void NotifyAnimStart(RE::StaticFunctionTag*,
@@ -644,34 +644,34 @@ inline bool IsSexlabEnabled()
 
 ### 13. Papyrus Scripts
 
-#### MatchmakerVR_SexlabBridge.psc (Native Script)
+#### VRSexMenu_SexlabBridge.psc (Native Script)
 
 ```papyrus
-Scriptname MatchmakerVR_SexlabBridge Hidden
+Scriptname VRSexMenu_SexlabBridge Hidden
 
 ; === Native function declarations (bound in C++) ===
 
-; Called by MatchmakerVR_SexlabListener when animation starts
+; Called by VRSexMenu_SexlabListener when animation starts
 Function NotifyAnimStart(int threadId, string animId, Actor[] actors) Global Native
 
-; Called by MatchmakerVR_SexlabListener when animation ends
+; Called by VRSexMenu_SexlabListener when animation ends
 Function NotifyAnimEnd(int threadId) Global Native
 
-; Called by MatchmakerVR_SexlabListener when stage changes
+; Called by VRSexMenu_SexlabListener when stage changes
 Function NotifyStageChange(int threadId, int newStage) Global Native
 ```
 
-#### MatchmakerVR_SexlabListener.psc (Quest Script)
+#### VRSexMenu_SexlabListener.psc (Quest Script)
 
 ```papyrus
-Scriptname MatchmakerVR_SexlabListener extends Quest
+Scriptname VRSexMenu_SexlabListener extends Quest
 
 ; === Properties ===
 SexLabFramework Property SexLab Auto
 
 ; Track our own hooks
-string m_playerHook = "MatchmakerVR_Player"
-string m_sceneHook = "MatchmakerVR_Scene"
+string m_playerHook = "VRSexMenu_Player"
+string m_sceneHook = "VRSexMenu_Scene"
 
 ; === Initialization ===
 
@@ -698,7 +698,7 @@ Function InitializeTracking()
         RegisterForModEvent(m_playerHook + "_End", "OnPlayerAnimEnd")
         RegisterForModEvent(m_playerHook + "_Orgasm", "OnPlayerOrgasm")
 
-        Debug.Trace("[MatchmakerVR] SexLab tracking initialized")
+        Debug.Trace("[VRSexMenu] SexLab tracking initialized")
     endif
 EndFunction
 
@@ -709,12 +709,12 @@ Event OnPlayerAnimStart(Form actorForm, int threadId)
     if thread
         Actor[] actors = thread.Positions
         string animName = "" ; TODO: Get animation name
-        MatchmakerVR_SexlabBridge.NotifyAnimStart(threadId, animName, actors)
+        VRSexMenu_SexlabBridge.NotifyAnimStart(threadId, animName, actors)
     endif
 EndEvent
 
 Event OnPlayerAnimEnd(Form actorForm, int threadId)
-    MatchmakerVR_SexlabBridge.NotifyAnimEnd(threadId)
+    VRSexMenu_SexlabBridge.NotifyAnimEnd(threadId)
 EndEvent
 
 Event OnPlayerOrgasm(Form actorForm, int threadId)
@@ -728,19 +728,19 @@ Event OnSceneAnimStart(Form actorForm, int threadId)
     if thread
         Actor[] actors = thread.Positions
         string animName = ""
-        MatchmakerVR_SexlabBridge.NotifyAnimStart(threadId, animName, actors)
+        VRSexMenu_SexlabBridge.NotifyAnimStart(threadId, animName, actors)
     endif
 EndEvent
 
 Event OnSceneStageStart(Form actorForm, int threadId)
     sslThreadController thread = SexLab.GetController(threadId)
     if thread
-        MatchmakerVR_SexlabBridge.NotifyStageChange(threadId, thread.Stage)
+        VRSexMenu_SexlabBridge.NotifyStageChange(threadId, thread.Stage)
     endif
 EndEvent
 
 Event OnSceneAnimEnd(Form actorForm, int threadId)
-    MatchmakerVR_SexlabBridge.NotifyAnimEnd(threadId)
+    VRSexMenu_SexlabBridge.NotifyAnimEnd(threadId)
 EndEvent
 
 ; === Start Animation Function (called from C++ via Papyrus dispatch) ===
@@ -748,7 +748,7 @@ EndEvent
 Function StartAnimationWithId(Actor[] actors, string animId, string hookName) Global
     SexLabFramework SL = SexLabUtil.GetAPI()
     if !SL
-        Debug.Trace("[MatchmakerVR] SexLab not available")
+        Debug.Trace("[VRSexMenu] SexLab not available")
         return
     endif
 
@@ -783,12 +783,12 @@ EndFunction
 - Register default in `RegisterConfigOptions()`
 
 ### Task 2: Papyrus Bridge Script
-**Files:** `papyrus/mods/MatchmakerVR/Scripts/Source/MatchmakerVR_SexlabBridge.psc`
+**Files:** `papyrus/mods/VRSexMenu/Scripts/Source/VRSexMenu_SexlabBridge.psc`
 - Create native script with function declarations
 - NotifyAnimStart, NotifyAnimEnd, NotifyStageChange
 
 ### Task 3: Papyrus Listener Script
-**Files:** `papyrus/mods/MatchmakerVR/Scripts/Source/MatchmakerVR_SexlabListener.psc`
+**Files:** `papyrus/mods/VRSexMenu/Scripts/Source/VRSexMenu_SexlabListener.psc`
 - Create quest script for event handling
 - Player tracking via SexLab.TrackActor
 - Hook-based tracking for scenes we start

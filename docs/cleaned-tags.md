@@ -8,7 +8,7 @@ Path preffix for all below ..\Interface\OStim\icons\OStim\
 | Vaginal | 550 | sexual/vaginalsex_mf.dds | sexual/vaginalsex_ff.dds | | | |
 | Blowjob | 416 | sexual/blowjob_mf.dds | | sexual/blowjob_mm.dds | sexual/blowjob_mff.dds | |
 | Bondage | 303 | | objects/cage_f.dds | | | |
-| Creature | 2101 | Matchmaker/creature.dds |  | | | | //special case: No '..\Interface\OStim\icons\OStim\' prefix, this is a custom one
+| Creature | 2101 | VRSexMenu/creature.dds |  | | | | //special case: No '..\Interface\OStim\icons\OStim\' prefix, this is a custom one
 | Cunnilingus | 144 | sexual/cunnilingus_mf.dds | sexual/cunnilingus_ff.dds | | | |
 | Assault | 242 | sexual/spank_left_mf.dds | sexual/spank_left_ff.dds | sexual/spank_m.dds | | |
 | Standing | 157 | positional/standing_behind_mf.dds | | | positional/standing_mff.dds | positional/standing_mmff.dds |

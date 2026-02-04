@@ -7,7 +7,7 @@
 #include <variant>
 #include <vector>
 
-namespace Matchmaker {
+namespace VRSexMenu {
 
     /// Represents a Papyrus variable value with type information
     using VariableValue = std::variant<
@@ -202,4 +202,4 @@ namespace Matchmaker {
         RE::BSScript::Internal::VirtualMachine* GetVM();
     };
 
-} // namespace Matchmaker
+} // namespace VRSexMenu
