@@ -23,9 +23,8 @@ bool VRSexMenuManager::Initialize()
         return false;
     }
 
-    spdlog::info("VRSexMenuManager: Got 3DUI interface v{} build {}",
-        m_interface->GetInterfaceVersion(),
-        m_interface->GetBuildNumber());
+    spdlog::info("VRSexMenuManager: Got 3DUI interface v{}",
+        m_interface->GetInterfaceVersion());
 
     m_initialized = true;
     return true;

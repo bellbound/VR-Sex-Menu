@@ -211,9 +211,9 @@ bool ThreadMenu::CreateMenu()
     rootConfig.activationButtonMask = vr::ButtonMaskFromId(vr::k_EButton_SteamVR_Trigger);
     rootConfig.grabButtonMask = vr::ButtonMaskFromId(vr::k_EButton_Grip);
 
-    m_root = m_api->CreateRoot(rootConfig);
+    m_root = m_api->GetOrCreateRoot(rootConfig);
     if (!m_root) {
-        spdlog::error("ThreadMenu: Failed to create root");
+        spdlog::error("ThreadMenu: Failed to get/create root");
         return false;
     }
 
