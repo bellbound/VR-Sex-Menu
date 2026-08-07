@@ -139,13 +139,6 @@ bool NearbyActorFinder::IsValidNPC(RE::Actor* actor)
         return false;
     }
 
-    // Filter creatures if option enabled (non-playable races = creatures)
-    if (Config::IsFilterCreaturesEnabled()) {
-        if (auto* race = actorBase->race; race && !race->data.flags.any(RE::RACE_DATA::Flag::kPlayable)) {
-            return false;
-        }
-    }
-
     return true;
 }
 

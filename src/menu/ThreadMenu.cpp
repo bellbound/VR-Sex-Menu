@@ -382,6 +382,23 @@ void ThreadMenu::RefreshNavigations()
                 for (auto* actor : actors) {
                     actorConditions.push_back(Ostim::ActorCondition::FromActor(actor));
                 }
+
+                // For creature actors, FromActor only sets generic "creature" type,
+                // but OStim scenes use specific creature types like "crDeer", "crCanine", etc.
+                // Overlay the specific type from the current scene's actor definitions.
+                const auto* currentScene = loader->GetScene(sceneId);
+                if (currentScene && currentScene->actors.size() == actorConditions.size()) {
+                    for (size_t i = 0; i < actorConditions.size(); ++i) {
+                        if (actorConditions[i].type == "creature" &&
+                            !currentScene->actors[i].type.empty() &&
+                            currentScene->actors[i].type != "npc") {
+                            spdlog::info("ThreadMenu: Refined actor {} type from '{}' to '{}' using current scene",
+                                i, actorConditions[i].type, currentScene->actors[i].type);
+                            actorConditions[i].type = currentScene->actors[i].type;
+                        }
+                    }
+                }
+
                 spdlog::info("ThreadMenu: Built {} actor conditions for filtering", actorConditions.size());
             }
 
