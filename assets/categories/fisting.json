@@ -1,0 +1,16 @@
+{
+    "id": "fisting",
+    "name": "Fisting",
+    "icon": "OStim/sexual/vaginalfisting_mf",
+    "iconVariants": {
+        "mf": "OStim/sexual/vaginalfisting_mf",
+        "ff": "OStim/sexual/vaginalfisting_ff",
+        "f": "OStim/sexual/vaginalfisting_ff"
+    },
+    "priority": 56,
+    "tags": [
+        "vaginalfisting",
+        "analfisting",
+        "fisting"
+    ]
+}

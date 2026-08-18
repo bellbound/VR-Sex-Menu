@@ -1,0 +1,22 @@
+{
+    "id": "lying",
+    "name": "Lying Down",
+    "icon": "OStim/positional/lyingback_f",
+    "priority": 160,
+    "tags": [
+        "lyingback",
+        "lyingfront",
+        "lyingside",
+        "lyingbottom",
+        "lyingonback",
+        "lying",
+        "laying",
+        "layingback",
+        "leyingback",
+        "prone",
+        "onback",
+        "spooning",
+        "sleeping",
+        "sleepingsound"
+    ]
+}

@@ -526,21 +526,8 @@ void PaginationFlattener::CollectNavigations(
         }
 
         // Check actor compatibility
-        if (!actorConditions.empty()) {
-            if (destScene->actors.size() != actorConditions.size()) {
-                continue;
-            }
-
-            bool compatible = true;
-            for (size_t i = 0; i < actorConditions.size(); ++i) {
-                if (!actorConditions[i].Fulfills(destScene->actors[i])) {
-                    compatible = false;
-                    break;
-                }
-            }
-            if (!compatible) {
-                continue;
-            }
+        if (!ActorsFulfillScene(actorConditions, *destScene)) {
+            continue;
         }
 
         // Is destination a pagination scene? -> Recurse into it

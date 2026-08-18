@@ -1,0 +1,17 @@
+{
+    "id": "lesbian",
+    "name": "Female Only",
+    "icon": "OStim/symbols/gender_ff",
+    "priority": 120,
+    "tags": [
+        "lesbian",
+        "lesdom",
+        "tribbing",
+        "tribadism",
+        "allfemale"
+    ],
+    "excludeTags": [
+        "solo",
+        "creature"
+    ]
+}

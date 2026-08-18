@@ -4,12 +4,18 @@
 
 namespace Persistence {
 
-/// Handles SKSE serialization callbacks for ThreadStorageManager.
+/// Handles SKSE serialization callbacks for ThreadStorageManager and
+/// MenuViewState.
 ///
 /// Data Format (binary, SKSE cosave):
 /// - Record type: 'MMVR' (VRSexMenu)
-/// - Version: 1
-/// - Content: Thread storage data
+/// - Version: 2
+/// - Content: Thread storage data, then (v2+) the persisted menu view state
+///
+/// Version history:
+///   1 - thread storage only
+///   2 - appends MenuViewState: uint8 view mode + string selected category.
+///       v1 saves still load; the menu state just falls back to defaults.
 class SaveGameDataManager {
 public:
     static SaveGameDataManager* GetSingleton();
@@ -37,7 +43,10 @@ private:
 
     // Record type: 'MMVR' (VRSexMenu) - reversed for little-endian
     static constexpr uint32_t kRecordType = 'RVMM';
-    static constexpr uint32_t kDataVersion = 1;
+    static constexpr uint32_t kDataVersion = 2;
+
+    // First version that carries the menu view state
+    static constexpr uint32_t kMenuViewStateVersion = 2;
 
     // Safety limits
     static constexpr uint32_t kMaxStringLength = 256;

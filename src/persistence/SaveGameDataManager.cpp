@@ -1,4 +1,5 @@
 #include "SaveGameDataManager.h"
+#include "MenuViewState.h"
 #include "ThreadStorageManager.h"
 #include <spdlog/spdlog.h>
 
@@ -80,7 +81,23 @@ void SaveGameDataManager::OnSave(SKSE::SerializationInterface* intfc)
         written++;
     }
 
-    spdlog::info("SaveGameDataManager: Saved {} threads", written);
+    // Menu view state (v2+), appended after the threads
+    auto* viewState = MenuViewState::GetSingleton();
+
+    uint8_t viewMode = static_cast<uint8_t>(viewState->GetViewMode());
+    if (!intfc->WriteRecordData(viewMode)) {
+        spdlog::error("SaveGameDataManager: Failed to write view mode");
+        return;
+    }
+
+    const std::string selectedCategory = viewState->GetSelectedCategory();
+    if (!WriteString(intfc, selectedCategory)) {
+        spdlog::error("SaveGameDataManager: Failed to write selected category");
+        return;
+    }
+
+    spdlog::info("SaveGameDataManager: Saved {} threads, view mode {}, category '{}'",
+        written, viewMode, selectedCategory);
 }
 
 void SaveGameDataManager::OnLoad(SKSE::SerializationInterface* intfc)
@@ -89,6 +106,9 @@ void SaveGameDataManager::OnLoad(SKSE::SerializationInterface* intfc)
 
     auto* storage = ThreadStorageManager::GetSingleton();
     storage->Clear();
+
+    auto* viewState = MenuViewState::GetSingleton();
+    viewState->Clear();
 
     std::unordered_map<int32_t, std::vector<std::string>> loadedThreads;
 
@@ -99,10 +119,10 @@ void SaveGameDataManager::OnLoad(SKSE::SerializationInterface* intfc)
             continue;
         }
 
-        if (version != kDataVersion) {
-            spdlog::warn("SaveGameDataManager: Version mismatch ({} vs {})",
+        if (version > kDataVersion) {
+            spdlog::warn("SaveGameDataManager: Save is newer than this plugin ({} vs {}), skipping",
                 version, kDataVersion);
-            // Could add version migration here if needed
+            continue;
         }
 
         // Read thread count
@@ -153,6 +173,30 @@ void SaveGameDataManager::OnLoad(SKSE::SerializationInterface* intfc)
 
             loadedThreads[threadId] = std::move(formKeys);
         }
+
+        // Menu view state was added in v2 - older saves simply keep the defaults
+        if (version < kMenuViewStateVersion) {
+            spdlog::info("SaveGameDataManager: v{} save has no menu view state, using defaults",
+                version);
+            continue;
+        }
+
+        uint8_t viewMode = 0;
+        if (!intfc->ReadRecordData(viewMode)) {
+            spdlog::error("SaveGameDataManager: Failed to read view mode");
+            break;
+        }
+
+        std::string selectedCategory;
+        if (!ReadString(intfc, selectedCategory)) {
+            spdlog::error("SaveGameDataManager: Failed to read selected category");
+            break;
+        }
+
+        viewState->SetViewMode(viewMode == static_cast<uint8_t>(MenuViewMode::Category)
+            ? MenuViewMode::Category
+            : MenuViewMode::Graph);
+        viewState->SetSelectedCategory(selectedCategory);
     }
 
     storage->LoadThreads(std::move(loadedThreads));
@@ -161,8 +205,9 @@ void SaveGameDataManager::OnLoad(SKSE::SerializationInterface* intfc)
 
 void SaveGameDataManager::OnRevert(SKSE::SerializationInterface* /*intfc*/)
 {
-    spdlog::info("SaveGameDataManager: Reverting (clearing thread storage)...");
+    spdlog::info("SaveGameDataManager: Reverting (clearing thread storage and view state)...");
     ThreadStorageManager::GetSingleton()->Clear();
+    MenuViewState::GetSingleton()->Clear();
 }
 
 bool SaveGameDataManager::WriteString(SKSE::SerializationInterface* intfc,

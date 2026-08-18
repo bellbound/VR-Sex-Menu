@@ -1,17 +1,92 @@
 #include "ThreadMenu.h"
 #include "SceneStartManager.h"
 #include "../VRSexMenuManager.h"
+#include "../category/CategoryRepository.h"
+#include "../category/CategorySceneIndex.h"
 #include "../ostim/OstimPapyrusAPI.h"
 #include "../ostim/OstimStandaloneSceneLoader.h"
 #include "../ostim/OstimTranslationLoader.h"
+#include "../ostim/OstimVRApi.h"
 #include "../ostim/PaginationFlattener.h"
+#include "../ostim/SceneTokens.h"
+#include "../ostim/ThreadHeadIndex.h"
 #include "../ostim/ThreadTracker.h"
+#include "../persistence/MenuViewState.h"
 #include "../persistence/ThreadStorageManager.h"
 #include <RE/Skyrim.h>
 #include <spdlog/spdlog.h>
 #include <codecvt>
 #include <locale>
 #include <algorithm>
+
+namespace {
+    // Grid geometry. The two views share one grid, so both are described here.
+    constexpr int   kGridColumns = 5;
+
+    // How far apart icons sit, in the grid and in every row under it. One value
+    // for the lot: the toolbars are read as columns of the grid above them, and
+    // RebuildControlRow measures the orb's offset in these slots.
+    constexpr float kIconSpacing = 7.0f;
+
+    // The graph view lists the navigations of a single scene - a couple of rows,
+    // so the window is tall enough that it never scrolls in practice.
+    constexpr int kGraphGridRows = 11;
+
+    // The category view lists every installed animation in the category, which
+    // would fill all eleven rows and leave a wall of icons towering over the
+    // rest of the menu. Keep it to the height the graph view actually uses and
+    // let the rest scroll.
+    constexpr int kCategoryGridRows = 4;
+
+    // Visible height that shows exactly `rows` rows: the last one sits at
+    // (rows - 1) * spacing, and the next must fall outside the window.
+    constexpr float VisibleHeightForRows(int rows)
+    {
+        return (static_cast<float>(rows) - 0.5f) * kIconSpacing;
+    }
+
+    // Same arithmetic along the other axis, for the single-row toolbars.
+    constexpr float VisibleWidthForColumns(int columns)
+    {
+        return (static_cast<float>(columns) - 0.5f) * kIconSpacing;
+    }
+
+    // Every icon in the menu is drawn at this scale
+    constexpr float kButtonScale = 1.02f;
+
+    // How close a hand has to be to claim an element. Icons sit 7 units apart,
+    // and 3DUI's 10 unit default is wide enough that a hand between two of them
+    // takes whichever is marginally closer; half of it keeps the pick under the
+    // fingertip. Set on the root, so every row of the menu shares it.
+    constexpr float kHoverThreshold = 5.0f;
+
+    const char* const kPlaceholderIcon =
+        "..\\Interface\\OStim\\icons\\OStim\\symbols\\placeholder.dds";
+
+    /// The icon a pack advertises a scene with on its own hub page, which is the
+    /// closest thing a scene has to an icon of its own. Empty when the pack does
+    /// not advertise the scene, or advertises it with the placeholder - both of
+    /// which leave the category's icon as the best thing to show.
+    std::string AdvertisedIcon(const Ostim::Scene& scene)
+    {
+        for (const auto& nav : scene.navigations) {
+            if (!nav.origin.has_value() || nav.icon.empty()) {
+                continue;
+            }
+
+            std::string icon = nav.icon;
+            std::transform(icon.begin(), icon.end(), icon.begin(),
+                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            std::replace(icon.begin(), icon.end(), '\\', '/');
+
+            if (icon.find("symbols/placeholder") != std::string::npos) {
+                return {};
+            }
+            return nav.icon;
+        }
+        return {};
+    }
+}
 
 // Helper to convert string to wstring for tooltips
 static std::wstring ToWide(const std::string& str)
@@ -33,10 +108,19 @@ void ThreadMenu::Show(int32_t threadId, const RE::NiPoint3& position)
     m_currentSceneId.clear();
     m_threadEnded = false;
 
-    // Ensure button visibility is in normal state (not thread-ended state)
-    if (m_restartButton) m_restartButton->SetVisible(false);
-    if (m_stopButton) m_stopButton->SetVisible(true);
-    if (m_undressButton) m_undressButton->SetVisible(true);
+    // Drop the previous thread's eligibility data - the filter row and grid are
+    // rebuilt from this thread's actors once the async fetch lands
+    m_currentActorConditions.clear();
+    m_categoryScenes.clear();
+    m_filterCategoryIds.clear();
+    m_filterElements.clear();
+    m_playerInScene = false;
+    if (m_filterRow) m_filterRow->Clear();
+
+    // Nothing is playing yet, so no stage sits either side of it. ApplyViewChrome
+    // below puts the tool row back into its not-ended shape.
+    m_previousStageId.clear();
+    m_nextStageId.clear();
 
     // Register for scene change and thread end notifications
     auto* tracker = ThreadTracker::GetSingleton();
@@ -59,6 +143,9 @@ void ThreadMenu::Show(int32_t threadId, const RE::NiPoint3& position)
     if (m_minimized) {
         SetMinimized(false);
     }
+
+    // Restore the view the user last left the menu in (loaded from the co-save)
+    ApplyViewChrome();
 
     // Position menu relative to HMD (like ActorSelectionMenu)
     // X = left/right, Y = forward/back, Z = up/down
@@ -100,13 +187,8 @@ void ThreadMenu::Hide()
         m_threadEndedListenerHandle = 0;
     }
 
-    // Reset thread-ended UI state
-    if (m_threadEnded) {
-        m_threadEnded = false;
-        if (m_restartButton) m_restartButton->SetVisible(false);
-        if (m_stopButton) m_stopButton->SetVisible(true);
-        if (m_undressButton) m_undressButton->SetVisible(true);
-    }
+    // Reset thread-ended UI state. The tool row catches up on the next Show().
+    m_threadEnded = false;
 
     if (m_root) {
         m_root->SetVisible(false);
@@ -127,6 +209,16 @@ void ThreadMenu::OnExternalSceneChanged(const std::string& newSceneId)
         m_threadId, m_currentSceneId, newSceneId);
 
     m_currentSceneId = newSceneId;
+
+    // The category grid lists installed animations, not the current scene's
+    // navigations, so it does not change when the scene does. Rebuilding it here
+    // would only throw away the user's scroll position - but the stage steps do
+    // follow the thread, so they still need updating.
+    if (Persistence::MenuViewState::GetSingleton()->IsCategoryView()) {
+        RefreshStageButtons();
+        return;
+    }
+
     RefreshNavigations();
 }
 
@@ -149,10 +241,21 @@ void ThreadMenu::OnThreadEnded()
     // Clear navigation grid
     ClearNavigations();
 
-    // Hide scene control buttons, show restart button
-    if (m_stopButton) m_stopButton->SetVisible(false);
-    if (m_undressButton) m_undressButton->SetVisible(false);
-    if (m_restartButton) m_restartButton->SetVisible(true);
+    // Nothing left to browse into once the thread is gone
+    m_categoryScenes.clear();
+    m_filterCategoryIds.clear();
+    m_filterElements.clear();
+    if (m_filterRow) {
+        m_filterRow->Clear();
+        m_filterRow->SetVisible(false);
+    }
+
+    // Nowhere left to step to, and nothing left to control but the restart
+    m_previousStageId.clear();
+    m_nextStageId.clear();
+    m_playerInScene = false;
+    RebuildStageRow();
+    RebuildControlRow();
 
     // Update hover text to inform user
     if (m_hoverText) {
@@ -210,6 +313,7 @@ bool ThreadMenu::CreateMenu()
     rootConfig.eventCallback = &ThreadMenu::OnEvent;
     rootConfig.activationButtonMask = vr::ButtonMaskFromId(vr::k_EButton_SteamVR_Trigger);
     rootConfig.grabButtonMask = vr::ButtonMaskFromId(vr::k_EButton_Grip);
+    rootConfig.hoverThreshold = kHoverThreshold;
 
     m_root = m_api->GetOrCreateRoot(rootConfig);
     if (!m_root) {
@@ -219,10 +323,11 @@ bool ThreadMenu::CreateMenu()
 
     // Navigation grid (row-major with vertical scrolling)
     P3DUI::RowGridConfig gridConfig = P3DUI::RowGridConfig::Default("nav_grid");
-    gridConfig.numColumns = 5;          // 3 columns per row
-    gridConfig.columnSpacing = 7.0f;    // Horizontal spacing between columns
-    gridConfig.rowSpacing = 7.0f;       // Vertical spacing between rows
-    gridConfig.visibleHeight = 70.0f;   // Visible area height
+    gridConfig.numColumns = kGridColumns;
+    gridConfig.columnSpacing = kIconSpacing;  // Horizontal spacing between columns
+    gridConfig.rowSpacing = kIconSpacing;     // Vertical spacing between rows
+    // Per-view height; ApplyViewChrome swaps it when the view changes
+    gridConfig.visibleHeight = VisibleHeightForRows(kGraphGridRows);
 
     m_navGrid = m_api->CreateRowGrid(gridConfig);
     if (m_navGrid) {
@@ -234,10 +339,10 @@ bool ThreadMenu::CreateMenu()
 
     // Tool row (single-row grid below navigation grid - horizontal layout)
     P3DUI::ColumnGridConfig controlConfig = P3DUI::ColumnGridConfig::Default("control_row");
-    controlConfig.numRows = 1;            // Single row
-    controlConfig.columnSpacing = 7.0f;   // Match grid spacing
-    controlConfig.rowSpacing = 7.0f;      // Match grid spacing
-    controlConfig.visibleWidth = 60.0f;   // Match grid width
+    controlConfig.numRows = 1;                     // Single row
+    controlConfig.columnSpacing = kIconSpacing;    // Match grid spacing
+    controlConfig.rowSpacing = kIconSpacing;       // Match grid spacing
+    controlConfig.visibleWidth = 60.0f;            // Match grid width
 
     m_controlRow = m_api->CreateColumnGrid(controlConfig);
     if (m_controlRow) {
@@ -246,66 +351,49 @@ bool ThreadMenu::CreateMenu()
         m_controlRow->SetFillDirection(P3DUI::VerticalFill::TopToBottom, P3DUI::HorizontalFill::LeftToRight);
         m_controlRow->SetOrigin(P3DUI::VerticalOrigin::Bottom, P3DUI::HorizontalOrigin::Center);
 
-        // Stop button (stops scene)
-        P3DUI::ElementConfig stopConfig = P3DUI::ElementConfig::Default("stop_button");
-        stopConfig.texturePath = "textures\\VRSexMenu\\close.dds";
-        stopConfig.scale = 1.02f;  // Match grid element scale
-        stopConfig.facingMode = P3DUI::FacingMode::Full;
-        stopConfig.tooltip = L"Stop Scene";
+        RebuildControlRow();
+    }
 
-        m_stopButton = m_api->CreateElement(stopConfig);
-        if (m_stopButton) {
-            m_controlRow->AddChild(m_stopButton);
-        }
+    // Category filter row (below the tool row, only shown in the category view).
+    // Same layout as the tool row so the two read as one stacked toolbar.
+    P3DUI::ColumnGridConfig filterConfig = P3DUI::ColumnGridConfig::Default("filter_row");
+    filterConfig.numRows = 1;
+    filterConfig.columnSpacing = kIconSpacing;
+    filterConfig.rowSpacing = kIconSpacing;
+    // As wide as the grid above it and no wider - there are twenty-odd
+    // categories, and letting the row run their full length would leave the menu
+    // with a bar sticking out either side. The rest scrolls.
+    filterConfig.visibleWidth = VisibleWidthForColumns(kGridColumns);
 
-        // Undress button (cycles through undress states)
-        P3DUI::ElementConfig undressConfig = P3DUI::ElementConfig::Default("mm_undress_button");
-        undressConfig.texturePath = "textures\\VRSexMenu\\undress-partial.dds";
-        undressConfig.scale = 1.02f;
-        undressConfig.facingMode = P3DUI::FacingMode::Full;
-        undressConfig.tooltip = L"Undress Actors";
+    m_filterRow = m_api->CreateColumnGrid(filterConfig);
+    if (m_filterRow) {
+        m_root->AddChild(m_filterRow);
+        m_filterRow->SetLocalPosition(0, 0, -rowSpacing);  // Below control row
+        m_filterRow->SetFillDirection(P3DUI::VerticalFill::TopToBottom,
+                                      P3DUI::HorizontalFill::LeftToRight);
+        m_filterRow->SetOrigin(P3DUI::VerticalOrigin::Bottom,
+                               P3DUI::HorizontalOrigin::Center);
+        m_filterRow->SetVisible(false);
+    }
 
-        m_undressButton = m_api->CreateElement(undressConfig);
-        if (m_undressButton) {
-            m_controlRow->AddChild(m_undressButton);
-        }
+    // Stage steps, under the category row. They belong with the browser rather
+    // than the tool row: the row above is what picks an animation, and these
+    // two walk the one that was picked.
+    P3DUI::ColumnGridConfig stageConfig = P3DUI::ColumnGridConfig::Default("stage_row");
+    stageConfig.numRows = 1;
+    stageConfig.columnSpacing = kIconSpacing;
+    stageConfig.rowSpacing = kIconSpacing;
+    stageConfig.visibleWidth = VisibleWidthForColumns(kGridColumns);
 
-        // Center orb (grab handle) - positioned in center of elements
-        P3DUI::ElementConfig orbConfig = P3DUI::ElementConfig::Default("thread_center_orb");
-        orbConfig.modelPath = "meshes\\3DUI\\orb.nif";
-        orbConfig.scale = 1.02f;
-        orbConfig.isAnchorHandle = true;
-        orbConfig.facingMode = P3DUI::FacingMode::None;
-
-        m_centerOrb = m_api->CreateElement(orbConfig);
-        if (m_centerOrb) {
-            m_controlRow->AddChild(m_centerOrb);
-        }
-
-        // Minimize button
-        P3DUI::ElementConfig minimizeConfig = P3DUI::ElementConfig::Default("minimize_button");
-        minimizeConfig.texturePath = "textures\\VRSexMenu\\minimize.dds";
-        minimizeConfig.scale = 1.02f;  // Match grid element scale
-        minimizeConfig.facingMode = P3DUI::FacingMode::Full;
-        minimizeConfig.tooltip = L"Minimize Menu";
-
-        m_minimizeButton = m_api->CreateElement(minimizeConfig);
-        if (m_minimizeButton) {
-            m_controlRow->AddChild(m_minimizeButton);
-        }
-
-        // Restart button (shown when thread ends, hidden initially)
-        P3DUI::ElementConfig restartConfig = P3DUI::ElementConfig::Default("restart_button");
-        restartConfig.texturePath = "textures\\VRSexMenu\\rewind.dds";
-        restartConfig.scale = 1.02f;
-        restartConfig.facingMode = P3DUI::FacingMode::Full;
-        restartConfig.tooltip = L"Restart Scene";
-
-        m_restartButton = m_api->CreateElement(restartConfig);
-        if (m_restartButton) {
-            m_controlRow->AddChild(m_restartButton);
-            m_restartButton->SetVisible(false);  // Hidden until thread ends
-        }
+    m_stageRow = m_api->CreateColumnGrid(stageConfig);
+    if (m_stageRow) {
+        m_root->AddChild(m_stageRow);
+        m_stageRow->SetLocalPosition(0, 0, -2.0f * rowSpacing);  // Below the filter row
+        m_stageRow->SetFillDirection(P3DUI::VerticalFill::TopToBottom,
+                                     P3DUI::HorizontalFill::LeftToRight);
+        m_stageRow->SetOrigin(P3DUI::VerticalOrigin::Bottom,
+                              P3DUI::HorizontalOrigin::Center);
+        m_stageRow->SetVisible(false);
     }
 
     // Hover text (displays tooltip of hovered element, below control row)
@@ -327,6 +415,294 @@ bool ThreadMenu::CreateMenu()
     return true;
 }
 
+ThreadMenu::ControlRowLayout ThreadMenu::WantedControlRowLayout() const
+{
+    const bool categoryView = Persistence::MenuViewState::GetSingleton()->IsCategoryView();
+
+    ControlRowLayout layout;
+
+    // Minimized, the menu is the orb and the way back out of it. A grid drives
+    // its children's visibility itself, so leaving the rest in place and hidden
+    // does not work - they have to actually go.
+    if (m_minimized) {
+        layout.minimize = true;
+        return layout;
+    }
+
+    layout.sceneControls = !m_threadEnded;
+    layout.restart = m_threadEnded;
+    layout.vrControls = WantsVRControls();
+
+    // Minimizing hides the grid, which in the browser is the whole point of
+    // being there - and the row is busier here. Leave it to the graph view.
+    layout.minimize = !categoryView;
+
+    return layout;
+}
+
+void ThreadMenu::RebuildControlRow()
+{
+    if (!m_controlRow || !m_api) return;
+
+    const ControlRowLayout layout = WantedControlRowLayout();
+
+    // Clear() destroys every child, so all the button pointers go with it
+    m_controlRow->Clear();
+    m_stopButton = nullptr;
+    m_undressButton = nullptr;
+    m_restartButton = nullptr;
+    m_centerOrb = nullptr;
+    m_viewToggleButton = nullptr;
+    m_cameraToggleButton = nullptr;
+    m_lockHeightButton = nullptr;
+    m_minimizeButton = nullptr;
+
+    auto addButton = [this](const char* elementId, const char* texture,
+                            const wchar_t* tooltip) -> P3DUI::Element* {
+        P3DUI::ElementConfig config = P3DUI::ElementConfig::Default(elementId);
+        config.texturePath = texture;
+        config.scale = kButtonScale;
+        config.facingMode = P3DUI::FacingMode::Full;
+        config.tooltip = tooltip;
+
+        auto* element = m_api->CreateElement(config);
+        if (element) {
+            m_controlRow->AddChild(element);
+        }
+        return element;
+    };
+
+    // Every button the row wants, in the order they read in. Which side of the
+    // orb each ends up on is worked out below, not here.
+    struct ToolButton
+    {
+        const char* id;
+        const char* texture;
+        const wchar_t* tooltip;
+        P3DUI::Element** slot;
+    };
+
+    std::vector<ToolButton> buttons;
+
+    // What acts on the scene as a whole
+    if (layout.sceneControls) {
+        buttons.push_back({"stop_button", "textures\\VRSexMenu\\close.dds",
+            L"Stop Scene", &m_stopButton});
+        buttons.push_back({"mm_undress_button", "textures\\VRSexMenu\\undress-partial.dds",
+            L"Undress Actors", &m_undressButton});
+    }
+    if (layout.restart) {
+        buttons.push_back({"restart_button", "textures\\VRSexMenu\\rewind.dds",
+            L"Restart Scene", &m_restartButton});
+    }
+
+    // How the scene is watched, and how it is browsed
+    if (layout.vrControls) {
+        buttons.push_back({"camera_toggle_button",
+            "..\\Interface\\OStim\\icons\\OStim\\symbols\\switch.dds",
+            L"Switch Camera", &m_cameraToggleButton});
+        buttons.push_back({"lock_height_button",
+            "..\\Interface\\OStim\\icons\\OStim\\symbols\\arrow_down.dds",
+            L"Lock Height To Body", &m_lockHeightButton});
+    }
+    if (layout.sceneControls) {
+        buttons.push_back({"view_toggle_button", "textures\\VRSexMenu\\gallery.dds",
+            L"Browse by Category", &m_viewToggleButton});
+    }
+    if (layout.minimize) {
+        buttons.push_back({"minimize_button", "textures\\VRSexMenu\\minimize.dds",
+            L"Minimize Menu", &m_minimizeButton});
+    }
+
+    // The orb is what the rest of the menu is centred on, so the row is split
+    // down its middle rather than grouped by what the buttons do: an orb with
+    // three buttons one side and one the other sits visibly off to one side of
+    // the grid above it. An odd count keeps the spare on the left.
+    const size_t leftCount = (buttons.size() + 1) / 2;
+
+    auto addTo = [&](size_t from, size_t to) {
+        for (size_t i = from; i < to; ++i) {
+            *buttons[i].slot = addButton(buttons[i].id, buttons[i].texture, buttons[i].tooltip);
+        }
+    };
+
+    addTo(0, leftCount);
+
+    // The orb, which is also the grab handle the menu hangs off
+    P3DUI::ElementConfig orbConfig = P3DUI::ElementConfig::Default("thread_center_orb");
+    orbConfig.modelPath = "meshes\\3DUI\\orb.nif";
+    orbConfig.scale = kButtonScale;
+    orbConfig.isAnchorHandle = true;
+    orbConfig.facingMode = P3DUI::FacingMode::None;
+
+    m_centerOrb = m_api->CreateElement(orbConfig);
+    if (m_centerOrb) {
+        m_controlRow->AddChild(m_centerOrb);
+    }
+
+    addTo(leftCount, buttons.size());
+
+    // An odd number of buttons cannot be split evenly, so the row itself takes
+    // the half slot that is left over. The orb is what the grid, the category
+    // row and the stage row all line up on, and it is what the menu is grabbed
+    // by - better it stays put and the row leans than the other way round.
+    //
+    // The row centres its own content, which puts the orb (L-R)/2 slots off
+    // centre; the row moves the other way by the same amount. UI +X is the
+    // player's left, and a longer left side pushes the orb right, so the shift
+    // is positive.
+    const float overhang = static_cast<float>(leftCount) -
+                           static_cast<float>(buttons.size() - leftCount);
+    m_controlRow->SetLocalPosition(0.5f * overhang * kIconSpacing, 0.0f, 0.0f);
+
+    m_controlRowLayout = layout;
+
+    // The buttons that carry state have to be told what it is again
+    RefreshViewToggleButton();
+    RefreshVRControlButtons();
+    RefreshUndressButton();
+    if (m_minimizeButton && m_minimized) {
+        m_minimizeButton->SetTexture("textures\\VRSexMenu\\minimize_highlight.dds");
+        m_minimizeButton->SetTooltip(L"Restore Menu");
+    }
+}
+
+void ThreadMenu::RefreshStageButtons()
+{
+    auto* heads = Ostim::ThreadHeadIndex::GetSingleton();
+
+    std::string previousStage;
+    std::string nextStage;
+
+    // IsBuilt rather than EnsureBuilt: the index is built on a background thread
+    // and asking for it here would drag the whole scene load onto this one
+    if (!m_currentSceneId.empty() && !m_threadEnded && heads->IsBuilt()) {
+        previousStage = heads->GetPreviousStage(m_currentSceneId);
+        nextStage = heads->GetNextStage(m_currentSceneId);
+    }
+
+    if (previousStage == m_previousStageId && nextStage == m_nextStageId) {
+        return;
+    }
+
+    m_previousStageId = previousStage;
+    m_nextStageId = nextStage;
+
+    RebuildStageRow();
+}
+
+void ThreadMenu::RebuildStageRow()
+{
+    if (!m_stageRow || !m_api) return;
+
+    // The category browser lists first stages only, so the way through the rest
+    // of an animation is these two buttons. The graph view already has the
+    // pack's own Next in the grid and does not need them.
+    const bool wanted = Persistence::MenuViewState::GetSingleton()->IsCategoryView() &&
+                        !m_minimized && !m_threadEnded;
+
+    m_stageRow->Clear();
+    m_stageBackButton = nullptr;
+    m_stageForwardButton = nullptr;
+
+    auto addButton = [this](const char* elementId, const char* texture,
+                            const wchar_t* tooltip) -> P3DUI::Element* {
+        P3DUI::ElementConfig config = P3DUI::ElementConfig::Default(elementId);
+        config.texturePath = texture;
+        config.scale = kButtonScale;
+        config.facingMode = P3DUI::FacingMode::Full;
+        config.tooltip = tooltip;
+
+        auto* element = m_api->CreateElement(config);
+        if (element) {
+            m_stageRow->AddChild(element);
+        }
+        return element;
+    };
+
+    if (wanted && !m_previousStageId.empty()) {
+        m_stageBackButton = addButton("stage_back_button",
+            "..\\Interface\\OStim\\icons\\OStim\\symbols\\previous.dds",
+            L"Previous Stage");
+    }
+    if (wanted && !m_nextStageId.empty()) {
+        m_stageForwardButton = addButton("stage_forward_button",
+            "..\\Interface\\OStim\\icons\\OStim\\symbols\\next.dds",
+            L"Next Stage");
+    }
+
+    m_stageRow->SetVisible(m_stageBackButton != nullptr || m_stageForwardButton != nullptr);
+}
+
+void ThreadMenu::SyncControlRow()
+{
+    if (!(WantedControlRowLayout() == m_controlRowLayout)) {
+        RebuildControlRow();
+    }
+}
+
+bool ThreadMenu::WantsVRControls() const
+{
+    // Nothing to switch when the player is only watching: OStim VR moves *your*
+    // camera, and the fork has to be installed for there to be one to move
+    return !m_threadEnded && m_playerInScene && OstimVRApi::GetSingleton()->IsAvailable();
+}
+
+void ThreadMenu::RefreshVRControlButtons()
+{
+    auto* vr = OstimVRApi::GetSingleton();
+
+    if (m_cameraToggleButton) {
+        m_cameraToggleButton->SetTooltip(vr->IsFirstPerson()
+            ? L"Switch to 3rd Person"
+            : L"Switch to 1st Person");
+    }
+
+    if (m_lockHeightButton) {
+        // Locked, your view rides the animation's head - down to the floor when
+        // they lie down. Unlocked it stays at your own height. The arrow points
+        // where pressing takes it.
+        const bool locked = vr->IsLockHeightToBodyEnabled();
+        m_lockHeightButton->SetTexture(locked
+            ? "..\\Interface\\OStim\\icons\\OStim\\symbols\\arrow_up.dds"
+            : "..\\Interface\\OStim\\icons\\OStim\\symbols\\arrow_down.dds");
+        m_lockHeightButton->SetTooltip(locked
+            ? L"Disable Lock Height To Body"
+            : L"Enable Lock Height To Body");
+    }
+}
+
+void ThreadMenu::OnCameraToggleActivated()
+{
+    auto* vr = OstimVRApi::GetSingleton();
+    vr->SwitchCamera(!vr->IsFirstPerson());
+    RefreshVRControlButtons();
+}
+
+void ThreadMenu::OnLockHeightActivated()
+{
+    OstimVRApi::GetSingleton()->ToggleLockHeightToBody();
+    RefreshVRControlButtons();
+}
+
+void ThreadMenu::OnStageStepActivated(bool forward)
+{
+    const std::string& destination = forward ? m_nextStageId : m_previousStageId;
+    if (destination.empty() || m_threadId < 0) {
+        return;
+    }
+
+    spdlog::info("ThreadMenu: Stepping {} from '{}' to '{}'",
+        forward ? "forward" : "back", m_currentSceneId, destination);
+
+    OstimPapyrusAPI::GetSingleton()->NavigateTo(m_threadId, destination);
+    m_currentSceneId = destination;
+
+    // The browser's grid lists animations, not stages, so it stays as it is -
+    // only the two step buttons need to catch up with where the thread now is
+    RefreshStageButtons();
+}
+
 void ThreadMenu::RefreshNavigations()
 {
     ClearNavigations();
@@ -336,14 +712,20 @@ void ThreadMenu::RefreshNavigations()
 
     auto* loader = Ostim::OstimStandaloneSceneLoader::GetSingleton();
 
+    // The category view additionally needs the head index and the category
+    // buckets, both of which are pre-built on the same background thread.
+    const bool categoryView = Persistence::MenuViewState::GetSingleton()->IsCategoryView();
+    const bool dataReady = loader->IsLoaded() &&
+        (!categoryView || VRSexMenu::CategorySceneIndex::GetSingleton()->IsBuilt());
+
     // Non-blocking check: if scenes are still loading in background, show loading indicator
-    if (!loader->IsLoaded()) {
+    if (!dataReady) {
         spdlog::info("ThreadMenu: Scene data still loading, showing loading indicator");
 
         // Add a "Loading..." placeholder element
         P3DUI::ElementConfig loadingConfig = P3DUI::ElementConfig::Default("loading_indicator");
-        loadingConfig.texturePath = "..\\Interface\\OStim\\icons\\OStim\\symbols\\placeholder.dds";
-        loadingConfig.scale = 1.02f;
+        loadingConfig.texturePath = kPlaceholderIcon;
+        loadingConfig.scale = kButtonScale;
         loadingConfig.facingMode = P3DUI::FacingMode::Full;
         loadingConfig.tooltip = L"Loading scenes...";
 
@@ -383,39 +765,66 @@ void ThreadMenu::RefreshNavigations()
                     actorConditions.push_back(Ostim::ActorCondition::FromActor(actor));
                 }
 
-                // For creature actors, FromActor only sets generic "creature" type,
-                // but OStim scenes use specific creature types like "crDeer", "crCanine", etc.
-                // Overlay the specific type from the current scene's actor definitions.
+                // The playing scene is authoritative about what each actor *is*:
+                // OStim already matched these actors to these slots, so its slot
+                // types beat anything we can infer from the actor.
+                //
+                // ActorCondition::FromActor decides npc-vs-creature from
+                // Race::GetPlayable(), which labels every NPC on a non-playable
+                // race - vampires, custom follower races - a "creature". It also
+                // only ever produces the generic "creature", never the specific
+                // "crCanine"/"crDraugr" the scenes are written against. Taking
+                // the type from the scene fixes both.
                 const auto* currentScene = loader->GetScene(sceneId);
                 if (currentScene && currentScene->actors.size() == actorConditions.size()) {
                     for (size_t i = 0; i < actorConditions.size(); ++i) {
-                        if (actorConditions[i].type == "creature" &&
-                            !currentScene->actors[i].type.empty() &&
-                            currentScene->actors[i].type != "npc") {
-                            spdlog::info("ThreadMenu: Refined actor {} type from '{}' to '{}' using current scene",
-                                i, actorConditions[i].type, currentScene->actors[i].type);
-                            actorConditions[i].type = currentScene->actors[i].type;
+                        const std::string& slotType = currentScene->actors[i].type;
+                        if (slotType.empty() || actorConditions[i].type == slotType) {
+                            continue;
                         }
+                        spdlog::info("ThreadMenu: Actor {} type '{}' -> '{}' (from playing scene '{}')",
+                            i, actorConditions[i].type, slotType, currentScene->id);
+                        actorConditions[i].type = slotType;
                     }
+                } else {
+                    spdlog::warn("ThreadMenu: Could not resolve actor types from scene '{}' "
+                                 "({} scene actors vs {} thread actors) - falling back to "
+                                 "race-derived types, which may over-filter",
+                        sceneId, currentScene ? currentScene->actors.size() : 0,
+                        actorConditions.size());
                 }
 
                 spdlog::info("ThreadMenu: Built {} actor conditions for filtering", actorConditions.size());
+            }
+
+            // Store actors for translation placeholders and for the category
+            // view's compatibility filter
+            m_currentActors = actors;
+            m_currentActorConditions = actorConditions;
+
+            // Disable tooltips if player is in the scene (they show on back of hand which is awkward)
+            m_playerInScene = std::any_of(actors.begin(), actors.end(),
+                [](RE::Actor* a) { return a && a->IsPlayerRef(); });
+            if (m_root) {
+                m_root->SetTooltipsEnabled(!m_playerInScene);
+            }
+
+            // The VR camera buttons only apply to a scene the player is in, so
+            // the tool row's shape follows from what just came back
+            SyncControlRow();
+
+            if (Persistence::MenuViewState::GetSingleton()->IsCategoryView()) {
+                RefreshFilterRow();
+                PopulateCategoryGrid();
+                RefreshStageButtons();
+                RefreshUndressButton();
+                return;
             }
 
             // Get flattened navigations (handles pagination hierarchy collapsing)
             // Falls back to standard resolved navigations if no pagination rules apply
             auto* flattener = Ostim::PaginationFlattener::GetSingleton();
             m_currentNavigations = flattener->GetFlattenedNavigations(sceneId, actorConditions);
-
-            // Store actors for translation placeholders
-            m_currentActors = actors;
-
-            // Disable tooltips if player is in the scene (they show on back of hand which is awkward)
-            bool playerInScene = std::any_of(actors.begin(), actors.end(),
-                [](RE::Actor* a) { return a && a->IsPlayerRef(); });
-            if (m_root) {
-                m_root->SetTooltipsEnabled(!playerInScene);
-            }
 
             PopulateNavigationGrid();
         });
@@ -454,7 +863,7 @@ void ThreadMenu::PopulateNavigationGrid()
         // Get icon from the navigation
         std::string iconPath = flatNav.originalNav
             ? GetNavigationIcon(*flatNav.originalNav)
-            : "..\\Interface\\OStim\\icons\\OStim\\symbols\\placeholder.dds";
+            : kPlaceholderIcon;
 
         // Get display name - prefer final scene name for better UX
         std::string displayName = GetNavigationDisplayName(flatNav);
@@ -463,7 +872,7 @@ void ThreadMenu::PopulateNavigationGrid()
 
         P3DUI::ElementConfig config = P3DUI::ElementConfig::Default(elementId.c_str());
         config.texturePath = iconPath.c_str();
-        config.scale = 1.02f;
+        config.scale = kButtonScale;
         config.facingMode = P3DUI::FacingMode::Full;
         config.tooltip = tooltip.c_str();
 
@@ -482,6 +891,270 @@ void ThreadMenu::PopulateNavigationGrid()
 void ThreadMenu::ClearNavigations()
 {
     if (m_navGrid) m_navGrid->Clear();
+}
+
+// ============================================================================
+// Category view
+// ============================================================================
+
+namespace {
+    // Filter buttons sit at the same 1.02 the tool row uses, so the two rows
+    // read as one toolbar. The selected one is nudged just enough to be
+    // readable - category icons come from the packs and have no _highlight
+    // variant to swap to.
+    constexpr float kFilterScaleInactive = 1.02f;
+    constexpr float kFilterScaleActive = 1.15f;
+}
+
+std::string ThreadMenu::GetActiveCategoryId() const
+{
+    auto* repository = VRSexMenu::CategoryRepository::GetSingleton();
+
+    const std::string selected =
+        Persistence::MenuViewState::GetSingleton()->GetSelectedCategory();
+
+    // m_filterCategoryIds holds only the categories that have scenes these
+    // actors can perform. A selection outside it has no button on screen, so
+    // honouring it would show an empty grid with nothing lit - move to the first
+    // category that does have content instead. The persisted choice is left
+    // alone, so it comes back on a thread where it applies again.
+    if (!m_filterCategoryIds.empty()) {
+        if (std::find(m_filterCategoryIds.begin(), m_filterCategoryIds.end(), selected)
+                != m_filterCategoryIds.end()) {
+            return selected;
+        }
+        return m_filterCategoryIds.front();
+    }
+
+    // Filter row not built yet
+    if (!selected.empty() && repository->GetCategory(selected)) {
+        return selected;
+    }
+
+    // Nothing chosen yet, or the JSON that defined it was removed
+    const auto* fallback = repository->GetDefaultCategory();
+    return fallback ? fallback->id : std::string();
+}
+
+void ThreadMenu::SetViewMode(Persistence::MenuViewMode mode)
+{
+    Persistence::MenuViewState::GetSingleton()->SetViewMode(mode);
+
+    ApplyViewChrome();
+
+    // Both views are built from the same async actor fetch
+    RefreshNavigations();
+}
+
+void ThreadMenu::ApplyViewChrome()
+{
+    const bool categoryView = Persistence::MenuViewState::GetSingleton()->IsCategoryView();
+
+    // The filter row only belongs on screen in the category view
+    if (m_filterRow) {
+        m_filterRow->SetVisible(categoryView && !m_minimized);
+    }
+
+    // Shorten the grid for the category view so it stays the size of the rest
+    // of the menu instead of stacking every row it can fit
+    if (m_navGrid) {
+        m_navGrid->SetVisibleExtent(VisibleHeightForRows(
+            categoryView ? kCategoryGridRows : kGraphGridRows));
+    }
+
+    // Drop the hover text below the filter row so the two do not overlap
+    if (m_hoverText) {
+        m_hoverText->SetLocalPosition(0, 0, categoryView ? -20.0f : -10.0f);
+    }
+
+    // The browser drops minimize from the tool row and gains the stage steps in
+    // a row of their own
+    RefreshStageButtons();
+    RebuildStageRow();
+    if (!(WantedControlRowLayout() == m_controlRowLayout)) {
+        RebuildControlRow();
+    } else {
+        RefreshViewToggleButton();
+        RefreshVRControlButtons();
+    }
+}
+
+void ThreadMenu::RefreshViewToggleButton()
+{
+    if (!m_viewToggleButton) return;
+
+    if (Persistence::MenuViewState::GetSingleton()->IsCategoryView()) {
+        m_viewToggleButton->SetTexture("textures\\VRSexMenu\\gallery_highlight.dds");
+        m_viewToggleButton->SetTooltip(L"Back to Scene Graph");
+    } else {
+        m_viewToggleButton->SetTexture("textures\\VRSexMenu\\gallery.dds");
+        m_viewToggleButton->SetTooltip(L"Browse by Category");
+    }
+}
+
+void ThreadMenu::RefreshFilterRow()
+{
+    if (!m_filterRow) return;
+
+    m_filterRow->Clear();
+    m_filterCategoryIds.clear();
+    m_filterElements.clear();
+
+    auto* repository = VRSexMenu::CategoryRepository::GetSingleton();
+    auto* sceneIndex = VRSexMenu::CategorySceneIndex::GetSingleton();
+
+    for (const auto& category : repository->GetCategories()) {
+        // Skip categories with nothing this thread's actors could perform, so
+        // the row only offers buttons that lead somewhere
+        const size_t count =
+            sceneIndex->CountCompatibleScenes(category.id, m_currentActorConditions);
+        if (count == 0) {
+            continue;
+        }
+
+        std::string elementId = "cat_" + std::to_string(m_filterCategoryIds.size());
+        std::wstring tooltip = ToWide(category.name + " (" + std::to_string(count) + ")");
+        std::string iconPath = category.ResolveIconPath();
+
+        P3DUI::ElementConfig config = P3DUI::ElementConfig::Default(elementId.c_str());
+        config.texturePath = iconPath.c_str();
+        config.scale = kFilterScaleInactive;
+        config.facingMode = P3DUI::FacingMode::Full;
+        config.tooltip = tooltip.c_str();
+
+        if (auto* element = m_api->CreateElement(config)) {
+            m_filterRow->AddChild(element);
+            m_filterCategoryIds.push_back(category.id);
+            m_filterElements.push_back(element);
+        }
+    }
+
+    UpdateFilterHighlight();
+    m_filterRow->SetVisible(!m_minimized);
+
+    spdlog::info("ThreadMenu: Filter row has {} categories with content for these actors",
+        m_filterCategoryIds.size());
+}
+
+void ThreadMenu::UpdateFilterHighlight()
+{
+    const std::string activeId = GetActiveCategoryId();
+
+    for (size_t i = 0; i < m_filterElements.size(); ++i) {
+        if (!m_filterElements[i]) continue;
+        m_filterElements[i]->SetScale(m_filterCategoryIds[i] == activeId
+            ? kFilterScaleActive
+            : kFilterScaleInactive);
+    }
+}
+
+void ThreadMenu::PopulateCategoryGrid()
+{
+    m_currentNavigations.clear();
+
+    const std::string categoryId = GetActiveCategoryId();
+    if (categoryId.empty()) {
+        spdlog::warn("ThreadMenu: No categories installed - "
+                     "check Data/SKSE/Plugins/VRSexMenu/categories");
+        if (m_hoverText) {
+            m_hoverText->SetText(L"No categories installed");
+        }
+        return;
+    }
+
+    auto* sceneIndex = VRSexMenu::CategorySceneIndex::GetSingleton();
+    m_categoryScenes = sceneIndex->GetCompatibleScenes(categoryId, m_currentActorConditions);
+
+    // Animations their pack ships art for are what the grid is worth looking at;
+    // the ones falling back to the category icon are a wall of the same picture.
+    // Put the distinctive ones first, so the wall is what you scroll to rather
+    // than what you scroll past. Stable, so each half keeps the index's order.
+    std::stable_partition(m_categoryScenes.begin(), m_categoryScenes.end(),
+        [](const Ostim::Scene* scene) { return !AdvertisedIcon(*scene).empty(); });
+
+    spdlog::info("ThreadMenu: Category '{}' has {} scenes for {} actors",
+        categoryId, m_categoryScenes.size(), m_currentActorConditions.size());
+
+    auto* translator = Ostim::OstimTranslationLoader::GetSingleton();
+    const auto* category =
+        VRSexMenu::CategoryRepository::GetSingleton()->GetCategory(categoryId);
+
+    int sceneIdx = 0;
+    for (const auto* scene : m_categoryScenes) {
+        std::string elementId = "catscene_" + std::to_string(sceneIdx++);
+
+        std::string displayName = !scene->name.empty() ? scene->name : scene->id;
+        std::wstring tooltip = ToWide(translator->Translate(displayName, m_currentActors));
+
+        // The icon the pack advertises the scene with, when it has one. Plenty
+        // of packs point every entry at OStim's placeholder, which says nothing;
+        // for those the category's own icon at least says what kind of animation
+        // this is, in the variant matching who does what to whom.
+        std::string iconKey = AdvertisedIcon(*scene);
+        std::string iconPath;
+        if (!iconKey.empty()) {
+            iconPath = "..\\Interface\\OStim\\icons\\" + iconKey + ".dds";
+            std::replace(iconPath.begin(), iconPath.end(), '/', '\\');
+        } else if (category) {
+            iconPath = category->ResolveIconPath(Ostim::SceneSexPairing(*scene));
+        } else {
+            iconPath = kPlaceholderIcon;
+        }
+
+        P3DUI::ElementConfig config = P3DUI::ElementConfig::Default(elementId.c_str());
+        config.texturePath = iconPath.c_str();
+        config.scale = kButtonScale;
+        config.facingMode = P3DUI::FacingMode::Full;
+        config.tooltip = tooltip.c_str();
+
+        auto* element = m_api->CreateElement(config);
+        if (element && m_navGrid) {
+            m_navGrid->AddChild(element);
+        }
+    }
+
+    if (m_navGrid) {
+        m_navGrid->ResetScroll();
+    }
+
+    spdlog::info("ThreadMenu: Created {} category scene elements in grid", sceneIdx);
+}
+
+void ThreadMenu::OnCategorySelected(int categoryIndex)
+{
+    if (categoryIndex < 0 || categoryIndex >= static_cast<int>(m_filterCategoryIds.size())) {
+        spdlog::warn("ThreadMenu: Invalid category index: {}", categoryIndex);
+        return;
+    }
+
+    const std::string& categoryId = m_filterCategoryIds[categoryIndex];
+    spdlog::info("ThreadMenu: Category filter '{}' selected", categoryId);
+
+    Persistence::MenuViewState::GetSingleton()->SetSelectedCategory(categoryId);
+
+    ClearNavigations();
+    UpdateFilterHighlight();
+    PopulateCategoryGrid();
+}
+
+void ThreadMenu::OnCategorySceneSelected(int sceneIndex)
+{
+    if (sceneIndex < 0 || sceneIndex >= static_cast<int>(m_categoryScenes.size())) {
+        spdlog::warn("ThreadMenu: Invalid category scene index: {}", sceneIndex);
+        return;
+    }
+
+    const auto* scene = m_categoryScenes[sceneIndex];
+    spdlog::info("ThreadMenu: Starting '{}' ({}) from the category browser",
+        scene->id, scene->name);
+
+    if (m_threadId >= 0) {
+        OstimPapyrusAPI::GetSingleton()->NavigateTo(m_threadId, scene->id);
+        m_currentSceneId = scene->id;
+        // Stay in the browser: the grid is unchanged, only the playing scene
+        // moved - and with it the stages the step buttons lead to
+        RefreshStageButtons();
+    }
 }
 
 void ThreadMenu::OnNavigationSelected(int navIndex)
@@ -599,11 +1272,15 @@ void ThreadMenu::SetMinimized(bool minimized)
     // Show/hide navigation grid
     if (m_navGrid) m_navGrid->SetVisible(!minimized);
 
-    // Show/hide stop button (but not the orb or minimize button)
-    if (m_stopButton) m_stopButton->SetVisible(!minimized);
+    // Filter row only belongs on screen in the category view
+    if (m_filterRow) {
+        m_filterRow->SetVisible(!minimized &&
+            Persistence::MenuViewState::GetSingleton()->IsCategoryView());
+    }
 
-    // Show/hide undress button
-    if (m_undressButton) m_undressButton->SetVisible(!minimized);
+    // The stage row's buttons are dropped rather than hidden, same as the tool
+    // row's - see RebuildControlRow
+    RebuildStageRow();
 
     // Show/hide hover text and clear it when minimizing
     if (m_hoverText) {
@@ -613,13 +1290,9 @@ void ThreadMenu::SetMinimized(bool minimized)
         }
     }
 
-    // Update minimize button icon based on state (stays visible)
-    if (m_minimizeButton) {
-        m_minimizeButton->SetTexture(minimized
-            ? "textures\\VRSexMenu\\minimize_highlight.dds"
-            : "textures\\VRSexMenu\\minimize.dds");
-        m_minimizeButton->SetTooltip(minimized ? L"Restore Menu" : L"Minimize Menu");
-    }
+    // The tool row's own buttons are dropped rather than hidden - see
+    // RebuildControlRow for why hiding them does not stick
+    RebuildControlRow();
 
     spdlog::info("ThreadMenu: {} menu", minimized ? "Minimized" : "Restored");
 }
@@ -734,6 +1407,36 @@ bool ThreadMenu::HandleEvent(const P3DUI::Event* event)
             return true;
         }
 
+        // Step through the stages of the animation that is playing
+        if (id == "stage_back_button") {
+            OnStageStepActivated(false);
+            return true;
+        }
+        if (id == "stage_forward_button") {
+            OnStageStepActivated(true);
+            return true;
+        }
+
+        // First <-> third person, and whether the view rides the body's height
+        if (id == "camera_toggle_button") {
+            OnCameraToggleActivated();
+            return true;
+        }
+        if (id == "lock_height_button") {
+            OnLockHeightActivated();
+            return true;
+        }
+
+        // View toggle - swap between the scene graph and the category browser
+        if (id == "view_toggle_button") {
+            const bool categoryView =
+                Persistence::MenuViewState::GetSingleton()->IsCategoryView();
+            SetViewMode(categoryView
+                ? Persistence::MenuViewMode::Graph
+                : Persistence::MenuViewMode::Category);
+            return true;
+        }
+
         // Navigation elements
         if (id.rfind("nav_", 0) == 0) {
             try {
@@ -742,6 +1445,26 @@ bool ThreadMenu::HandleEvent(const P3DUI::Event* event)
                 return true;
             } catch (...) {
                 spdlog::warn("ThreadMenu: Invalid navigation ID: {}", id);
+            }
+        }
+
+        // Category filter buttons
+        if (id.rfind("cat_", 0) == 0) {
+            try {
+                OnCategorySelected(std::stoi(id.substr(4)));
+                return true;
+            } catch (...) {
+                spdlog::warn("ThreadMenu: Invalid category ID: {}", id);
+            }
+        }
+
+        // Browsed scenes in the category grid
+        if (id.rfind("catscene_", 0) == 0) {
+            try {
+                OnCategorySceneSelected(std::stoi(id.substr(9)));
+                return true;
+            } catch (...) {
+                spdlog::warn("ThreadMenu: Invalid category scene ID: {}", id);
             }
         }
     }

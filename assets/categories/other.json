@@ -1,0 +1,8 @@
+{
+    "id": "other",
+    "name": "Other",
+    "icon": "OStim/symbols/placeholder",
+    "priority": 9000,
+    "isOther": true,
+    "tags": []
+}

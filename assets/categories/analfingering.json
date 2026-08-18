@@ -1,0 +1,17 @@
+{
+    "id": "analfingering",
+    "name": "Anal Fingering",
+    "icon": "OStim/sexual/fingering_f",
+    "iconVariants": {
+        "mf": "OStim/sexual/fingering_f",
+        "ff": "OStim/sexual/fingering_f",
+        "f": "OStim/sexual/fingering_f",
+        "fm": "OStim/sexual/fingering_m",
+        "mm": "OStim/sexual/fingering_m",
+        "m": "OStim/sexual/fingering_m"
+    },
+    "priority": 54,
+    "tags": [
+        "analfingering"
+    ]
+}

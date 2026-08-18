@@ -1,0 +1,14 @@
+{
+    "id": "gay",
+    "name": "Male Only",
+    "icon": "OStim/symbols/gender_mm",
+    "priority": 130,
+    "tags": [
+        "gay",
+        "allmale"
+    ],
+    "excludeTags": [
+        "solo",
+        "creature"
+    ]
+}

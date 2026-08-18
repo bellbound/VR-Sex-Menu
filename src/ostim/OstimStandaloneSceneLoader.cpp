@@ -247,9 +247,24 @@ ActorCondition ActorCondition::FromActor(RE::Actor* actor)
 
 bool ActorCondition::Fulfills(const SceneActor& sceneActor) const
 {
-    // Type must match (unless scene allows any type via "npc" default)
-    if (!sceneActor.type.empty() && sceneActor.type != "npc") {
-        if (type != sceneActor.type) {
+    // Type must match. Note the npc slot is NOT a wildcard: a creature cannot
+    // stand in for a human role. Treating it as one let a canine in the thread
+    // match every human scene, which barely showed in the graph view (the
+    // reachable scenes are all inside the creature pack anyway) but flooded the
+    // category browser with animations the creature cannot perform.
+    const bool slotWantsNpc = sceneActor.type.empty() || sceneActor.type == "npc";
+    const bool actorIsNpc = (type == "npc");
+
+    if (slotWantsNpc) {
+        if (!actorIsNpc) {
+            return false;
+        }
+    } else if (type != sceneActor.type) {
+        // "creature" is the unrefined generic type ThreadMenu could not resolve
+        // to a specific race. Accept any creature slot rather than nothing.
+        const bool genericCreature =
+            (type == "creature" && sceneActor.type.rfind("cr", 0) == 0);
+        if (!genericCreature) {
             return false;
         }
     }
@@ -265,6 +280,26 @@ bool ActorCondition::Fulfills(const SceneActor& sceneActor) const
     // All scene requirements must be present in actor's requirements
     for (const auto& req : sceneActor.requirements) {
         if (requirements.find(req) == requirements.end()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ActorsFulfillScene(const std::vector<ActorCondition>& actorConditions,
+                        const Scene& scene)
+{
+    if (actorConditions.empty()) {
+        return true;  // actors unknown - do not filter
+    }
+
+    if (scene.actors.size() != actorConditions.size()) {
+        return false;
+    }
+
+    for (size_t i = 0; i < actorConditions.size(); ++i) {
+        if (!actorConditions[i].Fulfills(scene.actors[i])) {
             return false;
         }
     }
@@ -609,21 +644,7 @@ std::vector<const SceneNavigation*> OstimStandaloneSceneLoader::GetFilteredNavig
         ResolvedNavigation resolved = ResolveNavigation(nav);
         if (!resolved.finalScene) continue;
 
-        // Skip if actor counts don't match (when we have actor conditions)
-        if (!actorConditions.empty()) {
-            if (resolved.finalScene->actors.size() != actorConditions.size()) continue;
-
-            // Check if all actors fulfill the destination scene's requirements
-            bool fulfilled = true;
-            for (size_t i = 0; i < actorConditions.size(); ++i) {
-                if (!actorConditions[i].Fulfills(resolved.finalScene->actors[i])) {
-                    fulfilled = false;
-                    break;
-                }
-            }
-
-            if (!fulfilled) continue;
-        }
+        if (!ActorsFulfillScene(actorConditions, *resolved.finalScene)) continue;
 
         result.push_back(&nav);
     }
@@ -664,21 +685,7 @@ std::vector<OstimStandaloneSceneLoader::ResolvedNavigation> OstimStandaloneScene
         ResolvedNavigation resolved = ResolveNavigation(nav);
         if (!resolved.finalScene) continue;
 
-        // Skip if actor counts don't match (when we have actor conditions)
-        if (!actorConditions.empty()) {
-            if (resolved.finalScene->actors.size() != actorConditions.size()) continue;
-
-            // Check if all actors fulfill the destination scene's requirements
-            bool fulfilled = true;
-            for (size_t i = 0; i < actorConditions.size(); ++i) {
-                if (!actorConditions[i].Fulfills(resolved.finalScene->actors[i])) {
-                    fulfilled = false;
-                    break;
-                }
-            }
-
-            if (!fulfilled) continue;
-        }
+        if (!ActorsFulfillScene(actorConditions, *resolved.finalScene)) continue;
 
         result.push_back(std::move(resolved));
     }

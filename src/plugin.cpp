@@ -8,7 +8,11 @@
 #include "persistence/SaveGameDataManager.h"
 #include "ostim/OstimStandaloneSceneLoader.h"
 #include "ostim/OstimTranslationLoader.h"
+#include "ostim/ThreadHeadIndex.h"
+#include "category/CategoryRepository.h"
+#include "category/CategorySceneIndex.h"
 #include "ostim/OstimThreadInterface.h"
+#include "ostim/OstimVRApi.h"
 #include "ostim/CompatibilityTable.h"
 #include "papyrus/PapyrusVRSexMenuApi.h"
 #include "config/ConfigStorage.h"
@@ -48,6 +52,10 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 			} else {
 				spdlog::warn("Failed to dispatch to OStim - OStim integration disabled");
 			}
+
+			// The VR fork's own interface, which carries the camera and comfort
+			// settings the base mod knows nothing about
+			OstimVRApi::GetSingleton()->Initialize();
 		}
 		break;
 
@@ -94,6 +102,17 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 			spdlog::info("Background loading: OStim scene pre-load complete ({} scenes, {} translations)",
 				Ostim::OstimStandaloneSceneLoader::GetSingleton()->GetSceneCount(),
 				Ostim::OstimTranslationLoader::GetSingleton()->GetTranslationCount());
+
+			// Category browser indexes. Built here too, so opening the menu in
+			// category view never walks every installed scene on the game thread.
+			VRSexMenu::CategoryRepository::GetSingleton()->EnsureLoaded();
+			Ostim::ThreadHeadIndex::GetSingleton()->EnsureBuilt();
+			VRSexMenu::CategorySceneIndex::GetSingleton()->EnsureBuilt();
+			spdlog::info("Background loading: Category index complete "
+				"({} categories, {} thread heads, {} of them browsable)",
+				VRSexMenu::CategoryRepository::GetSingleton()->GetCategories().size(),
+				Ostim::ThreadHeadIndex::GetSingleton()->GetHeads().size(),
+				Ostim::ThreadHeadIndex::GetSingleton()->GetBrowsableHeads().size());
 		}).detach();
 
 		break;

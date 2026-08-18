@@ -11,12 +11,18 @@ set(sources ${sources}
     src/ostim/OstimPapyrusAPI.cpp
     src/ostim/OstimThreadBuilderInterface.cpp
     src/ostim/OstimThreadInterface.cpp
+    src/ostim/OstimVRApi.cpp
     src/ostim/ThreadTracker.cpp
     src/ostim/CompatibilityTable.cpp
     src/ostim/PaginationFlattener.cpp
+    src/ostim/SceneTokens.cpp
+    src/ostim/ThreadHeadIndex.cpp
+    src/category/CategoryRepository.cpp
+    src/category/CategorySceneIndex.cpp
     src/persistence/FormKeyUtil.cpp
     src/persistence/ThreadStorageManager.cpp
     src/persistence/SaveGameDataManager.cpp
+    src/persistence/MenuViewState.cpp
     src/menu/NearbyActorFinder.cpp
     src/menu/SceneStartManager.cpp
     src/menu/UIExtActorSelector.cpp

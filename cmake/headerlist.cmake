@@ -14,13 +14,21 @@ set(headers ${headers}
     src/ostim/OstimStandaloneSceneLoader.h
     src/ostim/OstimTranslationLoader.h
     src/ostim/OstimThreadInterface.h
+    src/ostim/OstimVRApi.h
+    src/ostim/OstimVRPluginAPI.h
     src/ostim/ThreadTracker.h
     src/ostim/OstimPapyrusAPI.h
     src/ostim/OstimThreadBuilderInterface.h
     src/ostim/CompatibilityTable.h
+    src/ostim/SceneTokens.h
+    src/ostim/ThreadHeadIndex.h
+    src/category/SceneCategory.h
+    src/category/CategoryRepository.h
+    src/category/CategorySceneIndex.h
     src/persistence/FormKeyUtil.h
     src/persistence/ThreadStorageManager.h
     src/persistence/SaveGameDataManager.h
+    src/persistence/MenuViewState.h
     src/menu/NearbyActorFinder.h
     src/menu/SceneStartManager.h
     src/menu/UIExtActorSelector.h

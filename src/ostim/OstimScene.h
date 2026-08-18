@@ -146,4 +146,17 @@ inline bool Scene::isSexual() const {
     return hasTag("sexual");
 }
 
+/// Whether a set of actors can perform a scene: the participant count must
+/// match and every actor must fulfil the requirements of the slot it would
+/// occupy (type, sex, and body requirements such as TNG/SOS schlongs).
+///
+/// An empty condition list means "actors unknown" and matches everything, which
+/// is what happens when OStim does not hand back a thread's actors.
+///
+/// This is the single eligibility rule. Every place that offers the player a
+/// scene - graph navigations, pagination flattening, the category browser - goes
+/// through here, so the views cannot drift apart.
+bool ActorsFulfillScene(const std::vector<ActorCondition>& actorConditions,
+                        const Scene& scene);
+
 } // namespace Ostim
