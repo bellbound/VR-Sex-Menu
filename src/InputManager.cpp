@@ -1,9 +1,12 @@
 #include "InputManager.h"
+#include "VRSexMenuManager.h"
 #include "log.h"
 #include <algorithm>
 
 uint64_t InputManager::s_lastButtonState[2] = {0, 0};
+uint64_t InputManager::s_currentButtonState[2] = {0, 0};
 uint64_t InputManager::s_blockedHeldButtons[2] = {0, 0};
+uint64_t InputManager::s_p3duiSkippedButtons[2] = {0, 0};
 
 InputManager* InputManager::GetSingleton()
 {
@@ -53,7 +56,19 @@ void InputManager::Shutdown()
 	m_initialized = false;
 	s_blockedHeldButtons[0] = 0;
 	s_blockedHeldButtons[1] = 0;
+	s_p3duiSkippedButtons[0] = 0;
+	s_p3duiSkippedButtons[1] = 0;
 	spdlog::info("InputManager shut down");
+}
+
+uint64_t InputManager::GetHeldButtons(bool isLeft)
+{
+	return s_currentButtonState[isLeft ? 0 : 1];
+}
+
+void InputManager::BlockHeldButtons(bool isLeft, uint64_t buttonMask)
+{
+	s_blockedHeldButtons[isLeft ? 0 : 1] |= buttonMask;
 }
 
 InputManager::CallbackId InputManager::AddVrButtonCallback(uint64_t buttonMask, VrButtonCallback callback)
@@ -149,8 +164,18 @@ bool InputManager::OnControllerStateChanged(
 		return false;  // Unknown device
 	}
 
-	uint64_t currentButtons = pControllerState->ulButtonPressed;
+	// Read from pOutputControllerState, not pControllerState: 3DUI runs its own
+	// hook and may already have taken the press for a menu it is hovering. What
+	// is left in the output state is what the game would otherwise have seen.
+	uint64_t currentButtons = pOutputControllerState
+		? pOutputControllerState->ulButtonPressed
+		: pControllerState->ulButtonPressed;
 	uint64_t lastButtons = s_lastButtonState[handIndex];
+
+	// What a combo callback sees when it asks what else is down. Set before the
+	// callbacks run, and left including the buttons blocked below - the player
+	// is still holding those, whatever the game has been told.
+	s_currentButtonState[handIndex] = currentButtons;
 
 	// Debug: log full state when it changes
 	if (currentButtons != lastButtons) {
@@ -162,17 +187,50 @@ bool InputManager::OnControllerStateChanged(
 	// Detect newly released buttons (bits that were 1 but are now 0)
 	uint64_t newlyReleased = lastButtons & ~currentButtons;
 
-	if (newlyPressed) {
-		spdlog::info("[{}] Button PRESSED: {} (mask: 0x{:X})", isLeft ? "Left" : "Right", GetButtonName(newlyPressed), newlyPressed);
-		uint64_t blocked = instance->InvokeCallbacks(isLeft, false, newlyPressed);
+	// Trigger and grip are 3DUI's activate and grab. While a hand is on a menu
+	// they belong to it, and a hotkey combo built out of them must not fire from
+	// the same press that clicked a button.
+	const uint64_t kP3duiButtons =
+		vr::ButtonMaskFromId(vr::k_EButton_SteamVR_Trigger) |
+		vr::ButtonMaskFromId(vr::k_EButton_Grip);
+
+	bool p3duiHovering = false;
+	if (auto* p3dui = VRSexMenuManager::GetSingleton()->GetInterface()) {
+		p3duiHovering = p3dui->IsHovering(isLeft, false);
+	}
+
+	uint64_t pressedToProcess = newlyPressed;
+	uint64_t releasedToProcess = newlyReleased;
+
+	if (p3duiHovering) {
+		uint64_t skipped = newlyPressed & kP3duiButtons;
+		if (skipped) {
+			s_p3duiSkippedButtons[handIndex] |= skipped;  // Remember for the release
+			pressedToProcess &= ~skipped;
+		}
+	}
+
+	// The hand may have left the menu mid-hold, so the release is matched against
+	// what was skipped rather than against whether it is still hovering.
+	uint64_t skippedReleased = newlyReleased & s_p3duiSkippedButtons[handIndex];
+	if (skippedReleased) {
+		s_p3duiSkippedButtons[handIndex] &= ~skippedReleased;
+		releasedToProcess &= ~skippedReleased;
+	}
+
+	if (pressedToProcess) {
+		spdlog::info("[{}] Button PRESSED: {} (mask: 0x{:X})", isLeft ? "Left" : "Right", GetButtonName(pressedToProcess), pressedToProcess);
+		uint64_t blocked = instance->InvokeCallbacks(isLeft, false, pressedToProcess);
 		s_blockedHeldButtons[handIndex] |= blocked;  // Remember blocked buttons while held
 	}
 
-	if (newlyReleased) {
-		spdlog::info("[{}] Button RELEASED: {} (mask: 0x{:X})", isLeft ? "Left" : "Right", GetButtonName(newlyReleased), newlyReleased);
-		instance->InvokeCallbacks(isLeft, true, newlyReleased);
-		s_blockedHeldButtons[handIndex] &= ~newlyReleased;  // Stop blocking on release
+	if (releasedToProcess) {
+		spdlog::info("[{}] Button RELEASED: {} (mask: 0x{:X})", isLeft ? "Left" : "Right", GetButtonName(releasedToProcess), releasedToProcess);
+		instance->InvokeCallbacks(isLeft, true, releasedToProcess);
 	}
+
+	// Stop blocking on release, whether or not the release was dispatched
+	s_blockedHeldButtons[handIndex] &= ~newlyReleased;
 
 	// Block consumed buttons from reaching the game - every frame while held
 	if (s_blockedHeldButtons[handIndex] && pOutputControllerState) {

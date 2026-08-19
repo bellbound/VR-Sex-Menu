@@ -72,6 +72,7 @@ void RegisterConfigOptions()
     config->RegisterFloatOption(Options::kMaxSceneRange, 7.0f);      // Default: 7 meters
     config->RegisterIntOption(Options::kActivatePromptEnabled, 1);   // Default: show prompt
     config->RegisterIntOption(Options::kHiggsQuickStartEnabled, 1);  // Default: enabled (if HIGGS present)
+    config->RegisterIntOption(Options::kSceneHotkeysEnabled, 1);     // Default: grip combos on
 }
 
 bool IsHiggsInstalled()

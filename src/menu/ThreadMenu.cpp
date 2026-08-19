@@ -3,6 +3,7 @@
 #include "../VRSexMenuManager.h"
 #include "../category/CategoryRepository.h"
 #include "../category/CategorySceneIndex.h"
+#include "../config/ConfigOptions.h"
 #include "../ostim/OstimPapyrusAPI.h"
 #include "../ostim/OstimStandaloneSceneLoader.h"
 #include "../ostim/OstimTranslationLoader.h"
@@ -54,11 +55,53 @@ namespace {
     // Every icon in the menu is drawn at this scale
     constexpr float kButtonScale = 1.02f;
 
-    // How close a hand has to be to claim an element. Icons sit 7 units apart,
-    // and 3DUI's 10 unit default is wide enough that a hand between two of them
-    // takes whichever is marginally closer; half of it keeps the pick under the
-    // fingertip. Set on the root, so every row of the menu shares it.
-    constexpr float kHoverThreshold = 5.0f;
+    // The two stage steps are the buttons you reach for most while a scene is
+    // playing, and the only ones in a row of their own, so they can afford to be
+    // bigger than the toolbars above them without crowding anything.
+    constexpr float kStageButtonScale = kButtonScale * 1.33f;
+
+    // And to sit further apart, for the same reason: two oversized icons at the
+    // grid's spacing very nearly touch, and reaching for one of a pair is easier
+    // when a hand cannot land between them.
+    constexpr float kStageIconSpacing = kIconSpacing * 1.5f;
+
+    // The controller combos ThreadMenuHotkeyManager watches for, spelled the way
+    // they read on a tooltip. Kept beside the buttons they drive so the two
+    // cannot drift apart.
+    const wchar_t* const kNextStageCombo  = L"Grip + A";
+    const wchar_t* const kPrevStageCombo  = L"Grip + B";
+    const wchar_t* const kCameraCombo     = L"Grip + Left Stick";
+    const wchar_t* const kLockHeightCombo = L"Grip + Right Stick";
+
+    /// The controller combo a button also answers to, as a tooltip suffix, so
+    /// the row itself is the reference for them. Just the label while the combos
+    /// are switched off, and for buttons that have none.
+    std::wstring WithHotkey(const wchar_t* label, const wchar_t* combo = nullptr)
+    {
+        if (!combo || !Config::AreSceneHotkeysEnabled()) {
+            return label;
+        }
+        return std::wstring(label) + L" (" + combo + L")";
+    }
+
+    /// The icon for the player's own body, which is what the first person
+    /// camera puts them behind the eyes of.
+    const char* PlayerSexIcon(bool highlight)
+    {
+        bool female = false;
+        if (auto* player = RE::PlayerCharacter::GetSingleton()) {
+            if (auto* base = player->GetActorBase()) {
+                female = base->GetSex() == RE::SEX::kFemale;
+            }
+        }
+
+        if (female) {
+            return highlight ? "textures\\VRSexMenu\\female_highlight.dds"
+                             : "textures\\VRSexMenu\\female.dds";
+        }
+        return highlight ? "textures\\VRSexMenu\\male_highlight.dds"
+                         : "textures\\VRSexMenu\\male.dds";
+    }
 
     const char* const kPlaceholderIcon =
         "..\\Interface\\OStim\\icons\\OStim\\symbols\\placeholder.dds";
@@ -96,7 +139,7 @@ static std::wstring ToWide(const std::string& str)
     return converter.from_bytes(str);
 }
 
-void ThreadMenu::Show(int32_t threadId, const RE::NiPoint3& position)
+void ThreadMenu::Show(int32_t threadId, const RE::NiPoint3& position, OpenHand hand)
 {
     if (!CreateMenu()) {
         spdlog::error("ThreadMenu: Failed to create menu");
@@ -124,6 +167,11 @@ void ThreadMenu::Show(int32_t threadId, const RE::NiPoint3& position)
 
     // Register for scene change and thread end notifications
     auto* tracker = ThreadTracker::GetSingleton();
+
+    // Showing over an already-visible menu - a restart does exactly this -
+    // would otherwise overwrite the handles below and leak the old thread's
+    // listeners, which then keep firing for a thread that is gone.
+    UnregisterTrackerListeners();
 
     m_sceneChangedListenerHandle = tracker->AddSceneChangedListener(
         [this](int32_t changedThreadId, const std::string& newSceneId) {
@@ -153,10 +201,20 @@ void ThreadMenu::Show(int32_t threadId, const RE::NiPoint3& position)
     constexpr float kHipHeightOffset = -25.0f;  // Below HMD (hip height)
 
     if (m_root) {
-        m_root->SetLocalPosition(0.0f, kForwardDistance, kHipHeightOffset);
         m_root->SetVRAnchor(P3DUI::VRAnchorType::HMD);
         m_root->SetFacingMode(P3DUI::FacingMode::Full);
-        m_root->SetVisible(true);
+
+        if (hand == OpenHand::None) {
+            m_root->SetLocalPosition(0.0f, kForwardDistance, kHipHeightOffset);
+            m_root->SetVisible(true);
+        } else {
+            // Land on the hand that pressed, then stay where it was. The offset
+            // the HMD placement uses has to go first: ShowAtHand puts the menu's
+            // centre at the hand, and anything left in the local position would
+            // push it that far off again.
+            m_root->SetLocalPosition(0.0f, 0.0f, 0.0f);
+            m_root->ShowAtHand(hand == OpenHand::Left);
+        }
     }
 
     m_visible = true;
@@ -174,9 +232,8 @@ void ThreadMenu::Show(int32_t threadId, const RE::NiPoint3& position)
         });
 }
 
-void ThreadMenu::Hide()
+void ThreadMenu::UnregisterTrackerListeners()
 {
-    // Unregister listeners before hiding
     auto* tracker = ThreadTracker::GetSingleton();
     if (m_sceneChangedListenerHandle != 0) {
         tracker->RemoveSceneChangedListener(m_sceneChangedListenerHandle);
@@ -186,6 +243,12 @@ void ThreadMenu::Hide()
         tracker->RemoveThreadEndedListener(m_threadEndedListenerHandle);
         m_threadEndedListenerHandle = 0;
     }
+}
+
+void ThreadMenu::Hide()
+{
+    // Unregister listeners before hiding
+    UnregisterTrackerListeners();
 
     // Reset thread-ended UI state. The tool row catches up on the next Show().
     m_threadEnded = false;
@@ -210,12 +273,13 @@ void ThreadMenu::OnExternalSceneChanged(const std::string& newSceneId)
 
     m_currentSceneId = newSceneId;
 
+    // The stage steps follow the thread wherever it goes, in both views
+    RefreshStageButtons();
+
     // The category grid lists installed animations, not the current scene's
     // navigations, so it does not change when the scene does. Rebuilding it here
-    // would only throw away the user's scroll position - but the stage steps do
-    // follow the thread, so they still need updating.
+    // would only throw away the user's scroll position.
     if (Persistence::MenuViewState::GetSingleton()->IsCategoryView()) {
-        RefreshStageButtons();
         return;
     }
 
@@ -267,27 +331,45 @@ void ThreadMenu::OnRestartActivated()
 {
     if (m_currentActors.empty()) {
         spdlog::warn("ThreadMenu: Cannot restart - no actors stored");
-        Hide();
+        if (m_hoverText) {
+            m_hoverText->SetText(L"Cannot restart - actors unknown");
+        }
         return;
     }
 
     spdlog::info("ThreadMenu: Restarting scene with {} actors", m_currentActors.size());
 
-    // Copy actors before hiding (Hide() doesn't clear them, but be safe)
     std::vector<RE::Actor*> actors = m_currentActors;
 
-    // Hide the menu temporarily
-    Hide();
+    // The menu deliberately stays up. Hiding first and letting the success
+    // callback bring it back left the user staring at nothing whenever the
+    // start failed, with no way to get the menu back short of grabbing an
+    // actor again. On success OnSceneStarted re-Shows it for the new thread.
+    //
+    // The old thread's registrations go now though: restarting a scene that is
+    // still running stops it first, and letting that end reach OnThreadEnded
+    // would redress everyone a moment before the new scene undresses them again.
+    UnregisterTrackerListeners();
 
-    // Start the scene with the same actors
+    if (m_hoverText) {
+        m_hoverText->SetText(L"Restarting...");
+    }
+
     SceneStartManager::GetSingleton()->StartScene(actors,
         [](int32_t threadId) {
             if (threadId >= 0) {
                 spdlog::info("ThreadMenu: Scene restarted, new thread {}", threadId);
                 VRSexMenuManager::GetSingleton()->OnSceneStarted(threadId);
-            } else {
-                spdlog::error("ThreadMenu: Failed to restart scene");
+                return;
             }
+
+            spdlog::error("ThreadMenu: Failed to restart scene");
+
+            auto* menu = ThreadMenu::GetSingleton();
+            if (menu && menu->IsVisible() && menu->m_hoverText) {
+                menu->m_hoverText->SetText(L"Could not restart - actors still busy");
+            }
+            RE::DebugNotification("VR Sex Menu: could not restart the scene");
         });
 }
 
@@ -313,7 +395,6 @@ bool ThreadMenu::CreateMenu()
     rootConfig.eventCallback = &ThreadMenu::OnEvent;
     rootConfig.activationButtonMask = vr::ButtonMaskFromId(vr::k_EButton_SteamVR_Trigger);
     rootConfig.grabButtonMask = vr::ButtonMaskFromId(vr::k_EButton_Grip);
-    rootConfig.hoverThreshold = kHoverThreshold;
 
     m_root = m_api->GetOrCreateRoot(rootConfig);
     if (!m_root) {
@@ -381,8 +462,8 @@ bool ThreadMenu::CreateMenu()
     // two walk the one that was picked.
     P3DUI::ColumnGridConfig stageConfig = P3DUI::ColumnGridConfig::Default("stage_row");
     stageConfig.numRows = 1;
-    stageConfig.columnSpacing = kIconSpacing;
-    stageConfig.rowSpacing = kIconSpacing;
+    stageConfig.columnSpacing = kStageIconSpacing;
+    stageConfig.rowSpacing = kStageIconSpacing;
     stageConfig.visibleWidth = VisibleWidthForColumns(kGridColumns);
 
     m_stageRow = m_api->CreateColumnGrid(stageConfig);
@@ -458,12 +539,12 @@ void ThreadMenu::RebuildControlRow()
     m_minimizeButton = nullptr;
 
     auto addButton = [this](const char* elementId, const char* texture,
-                            const wchar_t* tooltip) -> P3DUI::Element* {
+                            const std::wstring& tooltip) -> P3DUI::Element* {
         P3DUI::ElementConfig config = P3DUI::ElementConfig::Default(elementId);
         config.texturePath = texture;
         config.scale = kButtonScale;
         config.facingMode = P3DUI::FacingMode::Full;
-        config.tooltip = tooltip;
+        config.tooltip = tooltip.c_str();
 
         auto* element = m_api->CreateElement(config);
         if (element) {
@@ -478,7 +559,7 @@ void ThreadMenu::RebuildControlRow()
     {
         const char* id;
         const char* texture;
-        const wchar_t* tooltip;
+        std::wstring tooltip;
         P3DUI::Element** slot;
     };
 
@@ -496,14 +577,14 @@ void ThreadMenu::RebuildControlRow()
             L"Restart Scene", &m_restartButton});
     }
 
-    // How the scene is watched, and how it is browsed
+    // How the scene is watched, and how it is browsed. Both of these carry
+    // state, which RefreshVRControlButtons puts on them at the end of this
+    // function - what goes in here is only their resting shape.
     if (layout.vrControls) {
-        buttons.push_back({"camera_toggle_button",
-            "..\\Interface\\OStim\\icons\\OStim\\symbols\\switch.dds",
-            L"Switch Camera", &m_cameraToggleButton});
-        buttons.push_back({"lock_height_button",
-            "..\\Interface\\OStim\\icons\\OStim\\symbols\\arrow_down.dds",
-            L"Lock Height To Body", &m_lockHeightButton});
+        buttons.push_back({"camera_toggle_button", PlayerSexIcon(false),
+            WithHotkey(L"Switch Camera", kCameraCombo), &m_cameraToggleButton});
+        buttons.push_back({"lock_height_button", "textures\\VRSexMenu\\move.dds",
+            WithHotkey(L"Lock Height To Body", kLockHeightCombo), &m_lockHeightButton});
     }
     if (layout.sceneControls) {
         buttons.push_back({"view_toggle_button", "textures\\VRSexMenu\\gallery.dds",
@@ -606,12 +687,12 @@ void ThreadMenu::RebuildStageRow()
     m_stageForwardButton = nullptr;
 
     auto addButton = [this](const char* elementId, const char* texture,
-                            const wchar_t* tooltip) -> P3DUI::Element* {
+                            const std::wstring& tooltip) -> P3DUI::Element* {
         P3DUI::ElementConfig config = P3DUI::ElementConfig::Default(elementId);
         config.texturePath = texture;
-        config.scale = kButtonScale;
+        config.scale = kStageButtonScale;
         config.facingMode = P3DUI::FacingMode::Full;
-        config.tooltip = tooltip;
+        config.tooltip = tooltip.c_str();
 
         auto* element = m_api->CreateElement(config);
         if (element) {
@@ -623,12 +704,12 @@ void ThreadMenu::RebuildStageRow()
     if (wanted && !m_previousStageId.empty()) {
         m_stageBackButton = addButton("stage_back_button",
             "..\\Interface\\OStim\\icons\\OStim\\symbols\\previous.dds",
-            L"Previous Stage");
+            WithHotkey(L"Previous Stage", kPrevStageCombo));
     }
     if (wanted && !m_nextStageId.empty()) {
         m_stageForwardButton = addButton("stage_forward_button",
             "..\\Interface\\OStim\\icons\\OStim\\symbols\\next.dds",
-            L"Next Stage");
+            WithHotkey(L"Next Stage", kNextStageCombo));
     }
 
     m_stageRow->SetVisible(m_stageBackButton != nullptr || m_stageForwardButton != nullptr);
@@ -653,22 +734,24 @@ void ThreadMenu::RefreshVRControlButtons()
     auto* vr = OstimVRApi::GetSingleton();
 
     if (m_cameraToggleButton) {
-        m_cameraToggleButton->SetTooltip(vr->IsFirstPerson()
+        // The player's own body, lit up while you are looking out of it
+        const bool firstPerson = vr->IsFirstPerson();
+        m_cameraToggleButton->SetTexture(PlayerSexIcon(firstPerson));
+        m_cameraToggleButton->SetTooltip(WithHotkey(firstPerson
             ? L"Switch to 3rd Person"
-            : L"Switch to 1st Person");
+            : L"Switch to 1st Person", kCameraCombo).c_str());
     }
 
     if (m_lockHeightButton) {
         // Locked, your view rides the animation's head - down to the floor when
-        // they lie down. Unlocked it stays at your own height. The arrow points
-        // where pressing takes it.
+        // they lie down. Unlocked it stays at your own height.
         const bool locked = vr->IsLockHeightToBodyEnabled();
         m_lockHeightButton->SetTexture(locked
-            ? "..\\Interface\\OStim\\icons\\OStim\\symbols\\arrow_up.dds"
-            : "..\\Interface\\OStim\\icons\\OStim\\symbols\\arrow_down.dds");
-        m_lockHeightButton->SetTooltip(locked
+            ? "textures\\VRSexMenu\\move_highlight.dds"
+            : "textures\\VRSexMenu\\move.dds");
+        m_lockHeightButton->SetTooltip(WithHotkey(locked
             ? L"Disable Lock Height To Body"
-            : L"Enable Lock Height To Body");
+            : L"Enable Lock Height To Body", kLockHeightCombo).c_str());
     }
 }
 
@@ -699,8 +782,15 @@ void ThreadMenu::OnStageStepActivated(bool forward)
     m_currentSceneId = destination;
 
     // The browser's grid lists animations, not stages, so it stays as it is -
-    // only the two step buttons need to catch up with where the thread now is
+    // only the two step buttons need to catch up with where the thread now is.
+    // The graph view shows the navigations of the scene that is playing, which
+    // is now a different one, so there the whole grid follows. (Reachable from
+    // the graph view through the grip combos, which work in both.)
     RefreshStageButtons();
+
+    if (!Persistence::MenuViewState::GetSingleton()->IsCategoryView()) {
+        RefreshNavigations();
+    }
 }
 
 void ThreadMenu::RefreshNavigations()
@@ -813,10 +903,14 @@ void ThreadMenu::RefreshNavigations()
             // the tool row's shape follows from what just came back
             SyncControlRow();
 
+            // Only the browser draws the stage steps, but the grip combos work
+            // them from either view, so where the thread stands is tracked in
+            // both. RebuildStageRow draws nothing in the graph view.
+            RefreshStageButtons();
+
             if (Persistence::MenuViewState::GetSingleton()->IsCategoryView()) {
                 RefreshFilterRow();
                 PopulateCategoryGrid();
-                RefreshStageButtons();
                 RefreshUndressButton();
                 return;
             }
@@ -962,9 +1056,11 @@ void ThreadMenu::ApplyViewChrome()
             categoryView ? kCategoryGridRows : kGraphGridRows));
     }
 
-    // Drop the hover text below the filter row so the two do not overlap
+    // Drop the hover text below the filter row so the two do not overlap. The
+    // browser's stage steps hang under it and are drawn a third over size, so
+    // the text clears another couple of units there.
     if (m_hoverText) {
-        m_hoverText->SetLocalPosition(0, 0, categoryView ? -20.0f : -10.0f);
+        m_hoverText->SetLocalPosition(0, 0, categoryView ? -22.0f : -10.0f);
     }
 
     // The browser drops minimize from the tool row and gains the stage steps in
@@ -1176,6 +1272,7 @@ void ThreadMenu::OnNavigationSelected(int navIndex)
 
         // Update current scene to the destination for UI refresh
         m_currentSceneId = flatNav.destination;
+        RefreshStageButtons();
         RefreshNavigations();
     }
 }

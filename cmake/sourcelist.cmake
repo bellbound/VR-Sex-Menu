@@ -14,6 +14,7 @@ set(sources ${sources}
     src/ostim/OstimVRApi.cpp
     src/ostim/ThreadTracker.cpp
     src/ostim/CompatibilityTable.cpp
+    src/ostim/ActorPropertyTable.cpp
     src/ostim/PaginationFlattener.cpp
     src/ostim/SceneTokens.cpp
     src/ostim/ThreadHeadIndex.cpp

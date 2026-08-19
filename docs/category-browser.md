@@ -47,9 +47,14 @@ Every row is rebuilt rather than having its buttons hidden — a grid drives its
 children's visibility from the scroll window each frame, so a button hidden from
 outside comes straight back the next one.
 
-The root sets a 5 unit hover reach for the whole menu instead of 3DUI's 10.
-Icons sit 7 apart, so the default let a hand between two of them claim whichever
-was marginally closer; half of it keeps the pick under the fingertip.
+The root leaves the hover reach at 3DUI's 10 units. Icons sit 7 apart, so a hand
+between two of them does take whichever is marginally closer - but halving the
+reach to fix that cost more than it bought, and was taken back.
+
+The two stage steps are drawn at `kStageButtonScale`, a third over the scale the
+rest of the menu uses. They are the buttons reached for most while a scene plays,
+and the only ones with a row to themselves. The hover text underneath drops from
+-20 to -22 in this view to clear them.
 
 The tool row is split down the middle rather than grouped by what its buttons do:
 whatever the set of buttons is, half go left of the orb and half right, so the

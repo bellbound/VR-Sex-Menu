@@ -42,6 +42,11 @@ namespace Options {
     /// Enable HIGGS grab + trigger quick-start for OStim scenes.
     /// Type: bool (int 0/1), Default: 1 (enabled)
     constexpr std::string_view kHiggsQuickStartEnabled = "Controls:bHiggsQuickStartEnabled";
+
+    /// Enable the grip + button combos that drive the thread menu from the
+    /// controller, and the hotkey hints their tooltips carry.
+    /// Type: bool (int 0/1), Default: 1 (enabled)
+    constexpr std::string_view kSceneHotkeysEnabled = "Controls:bSceneHotkeysEnabled";
 }
 
 /// Register all options with defaults. Call after ConfigStorage::Initialize().
@@ -86,6 +91,15 @@ inline bool IsHiggsQuickStartEnabled()
 
 // Alias for legacy code
 inline bool IsGrabNpcTriggerEnabled() { return IsHiggsQuickStartEnabled(); }
+
+/// Enable the grip + button combos that drive the thread menu.
+///
+/// Grip on its own always goes to the game; only a completed combo is
+/// swallowed, and only where the button it mirrors is on screen anyway.
+inline bool AreSceneHotkeysEnabled()
+{
+    return ConfigStorage::GetSingleton()->GetInt(Options::kSceneHotkeysEnabled, 1) != 0;
+}
 
 /// Show a message box when activating an NPC in an OStim scene.
 inline bool IsActivateNpcInSceneEnabled()

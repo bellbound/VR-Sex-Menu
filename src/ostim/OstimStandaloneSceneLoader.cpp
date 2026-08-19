@@ -1,4 +1,5 @@
 #include "OstimStandaloneSceneLoader.h"
+#include "ActorPropertyTable.h"
 #include "CompatibilityTable.h"
 #include "../log.h"
 #include <nlohmann/json.hpp>
@@ -193,13 +194,37 @@ ActorCondition ActorCondition::FromActor(RE::Actor* actor)
     // Determine actor type
     auto* base = actor->GetActorBase();
     if (base) {
-        // Check if this is a humanoid NPC or a creature
-        auto* race = actor->GetRace();
-        if (race) {
-            // In Skyrim, humanoid races are playable races (human, elf, beast races)
-            // Creatures have non-playable races
-            bool isHumanoid = race->GetPlayable() || actor->IsPlayerRef();
-            cond.type = isHumanoid ? "npc" : "creature";
+        // Ask OStim what this actor is before guessing. Its actor properties
+        // give the exact type the scenes are written against ("crcanine", not
+        // "creature") and, for creatures, the body parts they have - which the
+        // guess below cannot produce at all, so every creature scene requiring
+        // "penis" was filtered out no matter which creature was in the thread.
+        auto* properties = ActorPropertyTable::GetSingleton();
+        const std::string ostimType = properties->GetActorType(actor);
+
+        if (!ostimType.empty() && ostimType != "npc") {
+            cond.type = ostimType;
+            cond.requirements = properties->GetActorRequirements(actor);
+
+            const std::string ostimSex = properties->GetActorSex(actor);
+            cond.sex = !ostimSex.empty() ? ostimSex : "any";
+
+            spdlog::info("ActorCondition: {} is OStim type '{}' (sex {}, {} requirements)",
+                actor->GetName(), cond.type, cond.sex, cond.requirements.size());
+            return cond;
+        }
+
+        if (!ostimType.empty()) {
+            // OStim calls it an npc, so the schlong-aware branch below applies.
+            cond.type = ostimType;
+        } else {
+            // No actor properties to go on - fall back to the race. Playable
+            // races are humanoid; everything else is a creature we cannot name.
+            auto* race = actor->GetRace();
+            if (race) {
+                bool isHumanoid = race->GetPlayable() || actor->IsPlayerRef();
+                cond.type = isHumanoid ? "npc" : "creature";
+            }
         }
 
         // Determine sex with futa/schlong support

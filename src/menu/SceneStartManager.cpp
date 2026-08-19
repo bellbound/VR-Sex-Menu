@@ -6,6 +6,14 @@
 #include "../persistence/ThreadStorageManager.h"
 #include <RE/Skyrim.h>
 #include <algorithm>
+#include <chrono>
+#include <thread>
+
+namespace {
+    // How long to wait for the threads we asked OStim to stop to report that
+    // they did, before giving up and telling the caller the start failed.
+    constexpr int kStopTimeoutSeconds = 10;
+}
 
 SceneStartManager::SceneStartManager()
 {
@@ -117,11 +125,14 @@ void SceneStartManager::StopExistingThreadsAndStart(
     }
 
     // Create new pending start
+    const uint64_t generation = ++m_pendingGeneration;
+
     m_pendingStart = std::make_unique<PendingStart>();
     m_pendingStart->actors = sortedActors;
     m_pendingStart->sceneId = sceneId;
     m_pendingStart->waitingForThreads = threadsToStop;
     m_pendingStart->callback = callback;
+    m_pendingStart->generation = generation;
 
     // Register listener for thread end events
     m_pendingStart->listenerHandle = ThreadTracker::GetSingleton()->AddThreadEndedListener(
@@ -166,6 +177,45 @@ void SceneStartManager::StopExistingThreadsAndStart(
     for (int32_t threadId : threadsToStop) {
         spdlog::info("SceneStartManager: Stopping thread {}", threadId);
         ostimApi->StopScene(threadId);
+    }
+
+    // Nothing guarantees the end events arrive - OStim can refuse to stop a
+    // thread, and the Papyrus fallback path depends on a mod event registration
+    // that may not be there. Without this the caller waits forever and its UI
+    // sits on "Restarting..." with no way out.
+    std::thread([this, generation]() {
+        std::this_thread::sleep_for(std::chrono::seconds(kStopTimeoutSeconds));
+        SKSE::GetTaskInterface()->AddTask([this, generation]() {
+            AbandonPendingStart(generation);
+        });
+    }).detach();
+}
+
+void SceneStartManager::AbandonPendingStart(uint64_t generation)
+{
+    ThreadCallback callback;
+    uint32_t listenerHandle = 0;
+
+    {
+        std::lock_guard<std::mutex> lock(m_pendingMutex);
+
+        // Already started, cancelled, or superseded by a newer request.
+        if (!m_pendingStart || m_pendingStart->generation != generation) {
+            return;
+        }
+
+        spdlog::error("SceneStartManager: Gave up waiting for {} thread(s) to end",
+            m_pendingStart->waitingForThreads.size());
+
+        callback = std::move(m_pendingStart->callback);
+        listenerHandle = m_pendingStart->listenerHandle;
+        m_pendingStart.reset();
+    }
+
+    ThreadTracker::GetSingleton()->RemoveThreadEndedListener(listenerHandle);
+
+    if (callback) {
+        callback(-1);
     }
 }
 

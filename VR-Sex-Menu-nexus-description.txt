@@ -1,0 +1,42 @@
+[center][color=#ffd966][b][size=5]INTRODUCTION[/size][/b][/color][/center]
+[quote][b]OStim Standalone VR only gives you a menu for scenes you take part in yourself. This mod gives you the same control over scenes between NPCs - start them, swap the animation while they run, and end them whenever you like.[/b][/quote]
+
+
+[center][color=#ffd966][size=5][b]KEY FEATURES[/b][/size][/color][/center]
+
+[color=#ffe599][size=4][b]◈ Control Any Running Scene[/b][/size][/color]
+[size=4]Open a scene browser for any OStim scene happening near you and change the animation or end it. Works for scenes you are part of as well.[/size]
+
+[color=#ffe599][size=4][b]◈ Start Scenes Between NPCs[/b][/size][/color]
+[size=4]Pick the participants from a UI Extensions menu and the scene starts right there.[/size]
+
+[color=#ffe599][size=4][b]◈ Open It However You Like[/b][/size][/color]
+[size=4]Cast the lesser power at any NPC, or grab one with a hand and pull the trigger on the other. Running scenes can also be reached by activating a participant or with a hotkey, both set up in the MCM. The spell can be removed from your inventory in the MCM if you only use the other options.[/size]
+
+[color=#ffe599][size=4][b]◈ Put The Menu Where You Want It[/b][/size][/color]
+[size=4]Grab the glowing orb and move the menu anywhere around you.[/size]
+
+[color=#ffe599][size=4][b]◈ Undress And Redress[/b][/size][/color]
+[size=4]Take an NPC's clothes off and put them back on straight from the menu.[/size]
+
+[color=#ffe599][size=4][b]◈ Matching Animations For Every Body[/b][/size][/color]
+[size=4]TNG and SOS futa characters are recognised and get both male and female animations.[/size]
+
+[color=#ffe599][size=4][b]◈ Creatures[/b][/size][/color]
+[size=4]Creature filtering can be turned off if you want everything available.[/size]
+
+
+[center][color=#ffd966][size=5][b]REQUIREMENTS[/b][/size][/color][/center]
+[center][b][size=4]OStim Standalone VR[/size][/b][/center]
+[center][size=4][i]plus animation packs.[/i][/size][/center]
+[center][b][size=4][url=https://www.nexusmods.com/skyrimspecialedition/mods/169497]3DUI[/url][/size][/b][/center]
+[center][b][size=4][url=https://www.nexusmods.com/skyrimspecialedition/mods/27782]Skyrim VR Tools[/url][/size][/b][/center]
+[center][b][size=4][url=https://www.nexusmods.com/skyrimspecialedition/mods/17561]UI Extensions[/url][/size][/b][/center]
+[center][/center]
+[center][b][size=4][url=https://www.nexusmods.com/skyrimspecialedition/mods/43930]HIGGS[/url] & [url=https://www.nexusmods.com/skyrimspecialedition/mods/66025]PLANCK[/url][/size][/b][/center]
+[center][size=4][i]not required, but needed to grab NPCs to open the menu.[/i][/size][/center]
+[center][b][size=4]TNG / SOS[/size][/b][/center]
+[center][size=4][i]not required, futa characters are given male and female animations if you use either.[/i][/size][/center]
+
+[color=#ffe599][size=4][b]Safety & Compatibility[/b][/size][/color]
+[size=4]This is an SKSE mod, so it can be installed or uninstalled at any point in a playthrough. There are no known incompatibilities - please let me know if you find one.[/size]

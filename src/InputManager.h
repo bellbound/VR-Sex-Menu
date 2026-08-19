@@ -25,6 +25,17 @@ public:
 	// Remove a callback by its ID
 	void RemoveVrButtonCallback(CallbackId id);
 
+	// Every button held on a hand right now, as the hook last saw it - including
+	// the ones already blocked from the game. Readable from inside a callback,
+	// where it is the state the press being reported belongs to, so a combo can
+	// ask what else is down without tracking it press by press.
+	static uint64_t GetHeldButtons(bool isLeft);
+
+	// Block buttons that are already held for the rest of their hold, without
+	// having consumed them when they were pressed. A combo's modifier is let
+	// through while it is alone, and only swallowed once the combo completes.
+	static void BlockHeldButtons(bool isLeft, uint64_t buttonMask);
+
 private:
 	InputManager() = default;
 	~InputManager() = default;
@@ -54,5 +65,7 @@ private:
 	CallbackId m_nextCallbackId = 1;  // 0 is InvalidCallbackId
 
 	static uint64_t s_lastButtonState[2];     // Left=0, Right=1
+	static uint64_t s_currentButtonState[2];  // What the hook is looking at right now
 	static uint64_t s_blockedHeldButtons[2];  // Buttons currently blocked while held
+	static uint64_t s_p3duiSkippedButtons[2]; // Presses 3DUI took, whose release we skip too
 };

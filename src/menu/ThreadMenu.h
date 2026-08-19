@@ -33,11 +33,25 @@ public:
         return &instance;
     }
 
+    /// Which hand the menu should open on, when a hand is what opened it.
+    ///
+    /// A menu brought up from a controller belongs where the hand that asked for
+    /// it is, rather than at the fixed spot in front of the face that an opening
+    /// from the actor menu or from a scene starting has to settle for.
+    enum class OpenHand : std::uint8_t
+    {
+        None = 0,  // no hand asked - place relative to the HMD
+        Left,
+        Right
+    };
+
     /// Show the menu for a specific thread at a given position.
     ///
     /// @param threadId The OStim thread to control
     /// @param position World position to display the menu
-    void Show(int32_t threadId, const RE::NiPoint3& position);
+    /// @param hand The hand that asked for it, if one did
+    void Show(int32_t threadId, const RE::NiPoint3& position,
+              OpenHand hand = OpenHand::None);
 
     /// Hide the menu
     void Hide();
@@ -51,6 +65,32 @@ public:
     /// Called when the scene changes externally (e.g., via OStim's own UI)
     /// @param newSceneId The new scene ID
     void OnExternalSceneChanged(const std::string& newSceneId);
+
+    // === What the controller combos drive ===
+    //
+    // One entry point per button a combo mirrors, plus the test for whether
+    // that button is on screen. ThreadMenuHotkeyManager only fires a combo when
+    // its button is live, so a hotkey never does what a hand could not.
+
+    /// Whether a stage sits the given way along the animation that is playing
+    bool CanStepStage(bool forward) const
+    {
+        return !(forward ? m_nextStageId : m_previousStageId).empty();
+    }
+
+    /// Walk the playing animation one stage
+    /// @param forward true for the next stage, false for the previous one
+    void OnStageStepActivated(bool forward);
+
+    /// Whether the OStim VR camera switches belong on screen: the fork has to be
+    /// installed, and the player has to be in the scene they act on.
+    bool WantsVRControls() const;
+
+    /// Called when the first/third person button is activated
+    void OnCameraToggleActivated();
+
+    /// Called when the lock-height-to-body button is activated
+    void OnLockHeightActivated();
 
 private:
     ThreadMenu() = default;
@@ -116,18 +156,8 @@ private:
     /// the stateful ones back in step either way.
     void SyncControlRow();
 
-    /// Whether the OStim VR camera switches belong on screen: the fork has to be
-    /// installed, and the player has to be in the scene they act on.
-    bool WantsVRControls() const;
-
     /// Update the camera and lock-height buttons for the state OStim VR is in
     void RefreshVRControlButtons();
-
-    /// Called when the first/third person button is activated
-    void OnCameraToggleActivated();
-
-    /// Called when the lock-height-to-body button is activated
-    void OnLockHeightActivated();
 
     /// Work out which stages sit either side of the playing scene, and rebuild
     /// the stage row when they have moved. Cheap when nothing changed.
@@ -136,10 +166,6 @@ private:
     /// Fill the stage row under the filter row with the steps that apply.
     /// Rebuilt rather than hidden, for the reason RebuildControlRow gives.
     void RebuildStageRow();
-
-    /// Called when a stage step button is activated
-    /// @param forward true for the next stage, false for the previous one
-    void OnStageStepActivated(bool forward);
 
     /// Build the filter row, one button per installed category.
     /// Rebuilt on each refresh so empty categories can be skipped.
@@ -168,6 +194,9 @@ private:
 
     /// Called when the thread ends externally - shows restart option
     void OnThreadEnded();
+
+    /// Drop the ThreadTracker registrations, if any are held.
+    void UnregisterTrackerListeners();
 
     /// Called when restart button is clicked - restarts scene with same actors
     void OnRestartActivated();

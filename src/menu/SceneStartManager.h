@@ -91,6 +91,10 @@ private:
     /// Gender signature -> Starting scene ID
     std::unordered_map<std::string, std::string> m_startingScenes;
 
+    /// Give up on a pending start whose threads never reported ending.
+    /// @param generation The pending start this timeout was armed for
+    void AbandonPendingStart(uint64_t generation);
+
     /// Pending scene start tracking
     struct PendingStart {
         std::vector<RE::Actor*> actors;
@@ -98,7 +102,9 @@ private:
         std::unordered_set<int32_t> waitingForThreads;
         ThreadCallback callback;
         uint32_t listenerHandle = 0;
+        uint64_t generation = 0;
     };
     std::mutex m_pendingMutex;
     std::unique_ptr<PendingStart> m_pendingStart;
+    uint64_t m_pendingGeneration = 0;
 };

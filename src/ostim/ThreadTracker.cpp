@@ -129,6 +129,42 @@ void ThreadTracker::OnThreadStarted(OStim::Thread* thread)
     }
 }
 
+void ThreadTracker::OnThreadStarted(int32_t threadId,
+                                    const std::vector<RE::Actor*>& actors,
+                                    const std::string& sceneId)
+{
+    spdlog::info("ThreadTracker: Tracking thread {} with {} actors (Papyrus)",
+        threadId, actors.size());
+
+    std::unique_lock lock(m_mutex);
+
+    // Drop any earlier mapping for this thread id first. OStim reuses ids, and
+    // a stale actor left pointing at it would look busy forever.
+    auto existing = m_threadIdToActors.find(threadId);
+    if (existing != m_threadIdToActors.end()) {
+        for (RE::Actor* actor : existing->second) {
+            m_actorToThreadId.erase(actor);
+        }
+    }
+
+    std::vector<RE::Actor*> tracked;
+    tracked.reserve(actors.size());
+
+    for (RE::Actor* actor : actors) {
+        if (!actor) continue;
+        tracked.push_back(actor);
+        m_actorToThreadId[actor] = threadId;
+        spdlog::debug("ThreadTracker: Added actor '{}' to thread {}",
+            actor->GetName() ? actor->GetName() : "unnamed", threadId);
+    }
+
+    if (!sceneId.empty()) {
+        m_threadIdToSceneId[threadId] = sceneId;
+    }
+
+    m_threadIdToActors[threadId] = std::move(tracked);
+}
+
 void ThreadTracker::OnSceneChanged(int32_t threadId, const std::string& sceneId)
 {
     {

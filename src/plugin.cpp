@@ -14,6 +14,7 @@
 #include "ostim/OstimThreadInterface.h"
 #include "ostim/OstimVRApi.h"
 #include "ostim/CompatibilityTable.h"
+#include "ostim/ActorPropertyTable.h"
 #include "papyrus/PapyrusVRSexMenuApi.h"
 #include "config/ConfigStorage.h"
 #include "config/ConfigStoragePapyrusAdapter.h"
@@ -23,6 +24,45 @@
 // Flag to track if 3DUI is missing (set at DataLoaded, used for deferred notification)
 static bool g_3DUIMissing = false;
 static bool g_3DUIMissingNotificationShown = false;
+
+// Ask OStim for its plugin interface, which is what feeds ThreadTracker.
+//
+// Tried more than once: whether OStim answers depends on it having registered
+// its listener before we dispatch, and the VR fork does not always answer at
+// kPostPostLoad. Without the interface we never learn that a thread started or
+// ended, so scenes cannot be stopped before starting the next one and actors
+// are never redressed - see ThreadTracker's Papyrus fallback.
+static bool TryInitOstimInterface(const char* stage)
+{
+	auto* threadInterface = OstimThreadInterface::GetSingleton();
+	if (threadInterface->IsInitialized()) {
+		return true;
+	}
+
+	auto* messaging = SKSE::GetMessagingInterface();
+	if (!messaging) {
+		return false;
+	}
+
+	OStim::InterfaceExchangeMessage exchangeMsg;
+	messaging->Dispatch(OStim::InterfaceExchangeMessage::MESSAGE_TYPE, &exchangeMsg,
+		sizeof(exchangeMsg), "OStim");
+
+	// Dispatch reports success even when no plugin named "OStim" is listening,
+	// so the interface map is the only thing worth testing.
+	if (!exchangeMsg.interfaceMap) {
+		spdlog::warn("OStim did not hand over its interface map at {}", stage);
+		return false;
+	}
+
+	if (!threadInterface->Initialize(&exchangeMsg)) {
+		spdlog::error("Failed to initialize OstimThreadInterface at {}", stage);
+		return false;
+	}
+
+	spdlog::info("OstimThreadInterface initialized successfully at {}", stage);
+	return true;
+}
 
 void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
@@ -34,37 +74,30 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 	case SKSE::MessagingInterface::kPostPostLoad:
 		spdlog::info("PostPostLoad");
 		// Request OStim's interface via Dispatch (OStim responds to 'OST' message type)
-		{
-			OStim::InterfaceExchangeMessage exchangeMsg;
+		TryInitOstimInterface("kPostPostLoad");
 
-			auto* messaging = SKSE::GetMessagingInterface();
-			if (messaging->Dispatch(OStim::InterfaceExchangeMessage::MESSAGE_TYPE, &exchangeMsg, sizeof(exchangeMsg), "OStim")) {
-				spdlog::info("Dispatched interface request to OStim");
-				if (exchangeMsg.interfaceMap) {
-					if (OstimThreadInterface::GetSingleton()->Initialize(&exchangeMsg)) {
-						spdlog::info("OstimThreadInterface initialized successfully");
-					} else {
-						spdlog::error("Failed to initialize OstimThreadInterface");
-					}
-				} else {
-					spdlog::warn("OStim did not provide interface map - OStim may not be installed");
-				}
-			} else {
-				spdlog::warn("Failed to dispatch to OStim - OStim integration disabled");
-			}
-
-			// The VR fork's own interface, which carries the camera and comfort
-			// settings the base mod knows nothing about
-			OstimVRApi::GetSingleton()->Initialize();
-		}
+		// The VR fork's own interface, which carries the camera and comfort
+		// settings the base mod knows nothing about
+		OstimVRApi::GetSingleton()->Initialize();
 		break;
 
 	case SKSE::MessagingInterface::kDataLoaded:
 		spdlog::info("DataLoaded - Initializing managers");
 
+		// Second attempt at the handshake, for the OStim builds that are not
+		// ready to answer at kPostPostLoad.
+		if (!TryInitOstimInterface("kDataLoaded")) {
+			spdlog::warn("OStim's plugin interface is unavailable - falling back to the "
+			             "Papyrus mod events for thread tracking");
+		}
+
 		// Initialize compatibility layer for TNG/SOS schlong detection
 		// Must be done before scenes are loaded as ActorCondition uses this
 		Ostim::CompatibilityTable::GetSingleton()->SetupForms();
+
+		// OStim's own actor type/requirement rules, which is how creature scenes
+		// get filtered against the right creature. Needs loaded forms.
+		Ostim::ActorPropertyTable::GetSingleton()->Setup();
 
 		// Register menu event handler for input blocking during menus
 		MenuChecker::RegisterEventSink();

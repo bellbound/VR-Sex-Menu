@@ -20,6 +20,7 @@ set(headers ${headers}
     src/ostim/OstimPapyrusAPI.h
     src/ostim/OstimThreadBuilderInterface.h
     src/ostim/CompatibilityTable.h
+    src/ostim/ActorPropertyTable.h
     src/ostim/SceneTokens.h
     src/ostim/ThreadHeadIndex.h
     src/category/SceneCategory.h

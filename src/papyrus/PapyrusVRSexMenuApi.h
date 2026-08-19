@@ -3,6 +3,8 @@
 #include "../VRSexMenuManager.h"
 #include "../menu/UIExtActorSelector.h"
 #include "../menu/SceneStartManager.h"
+#include "../ostim/OstimThreadInterface.h"
+#include "../ostim/ThreadTracker.h"
 #include "../persistence/ThreadStorageManager.h"
 #include "../config/ConfigOptions.h"
 #include <RE/Skyrim.h>
@@ -70,6 +72,79 @@ namespace PapyrusVRSexMenuApi {
         return Config::IsHiggsInstalled();
     }
 
+    // === Thread tracking fallback ===
+    //
+    // ThreadTracker is normally fed by OStim's C++ plugin interface. Where that
+    // handshake fails the tracker stays empty for the whole session, and
+    // everything downstream breaks quietly: scenes are never stopped before the
+    // next one starts (OThreadBuilder.Create then refuses with -1), the menu
+    // never learns a scene ended, and actors are never redressed.
+    //
+    // VRSexMenu_OstimListener registers for OStim's mod events and calls these,
+    // which is a slower but always-available route to the same three facts. They
+    // stand down when the interface did come through, so the tracker only ever
+    // has one source.
+
+    /// True when OStim's plugin interface is driving the tracker already.
+    bool IsOstimInterfaceActive(RE::StaticFunctionTag*)
+    {
+        return OstimThreadInterface::GetSingleton()->IsInitialized();
+    }
+
+    void NotifyThreadStarted(
+        RE::StaticFunctionTag*,
+        std::int32_t threadId,
+        std::vector<RE::Actor*> actors,
+        std::string sceneId)
+    {
+        if (OstimThreadInterface::GetSingleton()->IsInitialized()) {
+            return;
+        }
+
+        spdlog::info("VRSexMenuApi::NotifyThreadStarted: thread {} scene '{}' ({} actors)",
+            threadId, sceneId, actors.size());
+
+        // Papyrus calls arrive off the game thread; the tracker's listeners
+        // touch 3DUI and the equip manager, so hand them over before notifying.
+        SKSE::GetTaskInterface()->AddTask(
+            [threadId, actors = std::move(actors), sceneId = std::move(sceneId)]() {
+                ThreadTracker::GetSingleton()->OnThreadStarted(threadId, actors, sceneId);
+            });
+    }
+
+    void NotifyThreadSceneChanged(
+        RE::StaticFunctionTag*,
+        std::int32_t threadId,
+        std::string sceneId)
+    {
+        if (OstimThreadInterface::GetSingleton()->IsInitialized()) {
+            return;
+        }
+
+        spdlog::info("VRSexMenuApi::NotifyThreadSceneChanged: thread {} -> '{}'",
+            threadId, sceneId);
+
+        SKSE::GetTaskInterface()->AddTask(
+            [threadId, sceneId = std::move(sceneId)]() {
+                ThreadTracker::GetSingleton()->OnSceneChanged(threadId, sceneId);
+            });
+    }
+
+    void NotifyThreadEnded(
+        RE::StaticFunctionTag*,
+        std::int32_t threadId)
+    {
+        if (OstimThreadInterface::GetSingleton()->IsInitialized()) {
+            return;
+        }
+
+        spdlog::info("VRSexMenuApi::NotifyThreadEnded: thread {}", threadId);
+
+        SKSE::GetTaskInterface()->AddTask([threadId]() {
+            ThreadTracker::GetSingleton()->OnThreadEnded(threadId);
+        });
+    }
+
     /// Bind all VRSexMenuApi native functions to the VM.
     inline bool Bind(VM* a_vm)
     {
@@ -82,6 +157,10 @@ namespace PapyrusVRSexMenuApi {
 
         a_vm->RegisterFunction("QuickStart"sv, scriptName, QuickStart);
         a_vm->RegisterFunction("IsHiggsInstalled"sv, scriptName, IsHiggsInstalled);
+        a_vm->RegisterFunction("IsOstimInterfaceActive"sv, scriptName, IsOstimInterfaceActive);
+        a_vm->RegisterFunction("NotifyThreadStarted"sv, scriptName, NotifyThreadStarted);
+        a_vm->RegisterFunction("NotifyThreadSceneChanged"sv, scriptName, NotifyThreadSceneChanged);
+        a_vm->RegisterFunction("NotifyThreadEnded"sv, scriptName, NotifyThreadEnded);
 
         spdlog::info("PapyrusVRSexMenuApi: Registered native functions for '{}'", scriptName);
 

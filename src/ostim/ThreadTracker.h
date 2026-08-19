@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 #include <shared_mutex>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -79,6 +80,13 @@ public:
 
     /// Called when a new thread starts. Extracts actor data and begins tracking.
     void OnThreadStarted(OStim::Thread* thread);
+
+    /// Same, for the Papyrus fallback path, which has no OStim::Thread to read
+    /// from and so hands over the pieces it queried itself. Re-tracking a
+    /// thread already known replaces its entry rather than duplicating it.
+    void OnThreadStarted(int32_t threadId,
+                         const std::vector<RE::Actor*>& actors,
+                         const std::string& sceneId);
 
     /// Called when the current scene changes within a thread.
     void OnSceneChanged(int32_t threadId, const std::string& sceneId);
