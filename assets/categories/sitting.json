@@ -1,9 +1,0 @@
-{
-    "id": "sitting",
-    "name": "Sitting",
-    "icon": "OStim/positional/chair/sitting_f",
-    "priority": 180,
-    "tags": [
-        "sitting"
-    ]
-}
