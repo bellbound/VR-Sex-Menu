@@ -55,20 +55,17 @@ namespace {
     // Radius of the cylinder the menu is wrapped onto, in game units - see the
     // call in CreateMenu. Smaller bends harder; 0 is flat again.
     //
-    // Judged against the menu's own half-width rather than against how far away
-    // it sits, because what the eye reads as curvature is how far round the
-    // cylinder the edges are carried - halfWidth/radius - and that has nothing
-    // to do with the distance to the head. The widest thing here is the tool
-    // row: seven slots at kIconSpacing puts its outer buttons 21 units out,
-    // where the grid above it reaches 14 and the rows below are clipped to the
-    // grid's width.
+    // The same 37.5 VR Dress Up uses, rather than a number rescaled to this
+    // menu's smaller width. Matching the *ratio* to half-width is what the
+    // theory says gives a matching curve, and it was tried first at 17.5 - and
+    // it bends far too hard in the hand. This menu is a grid of small icons
+    // read at a glance, not a spiral of gear leaned across, so the wrap that
+    // buys reach there just distorts here.
     //
-    // At 17.5 those outer buttons are carried through 1.2 radians and come 11
-    // units forward and 5 inward, while the grid's outer columns move 5 forward
-    // and 1.5 in. That is the same proportion VR Dress Up settled on for its own
-    // menu (37.5 against a 45-unit half-width), so the two menus read as having
-    // the same curve despite this one being half the size.
-    constexpr float kMenuCurveRadius = 17.5f;
+    // At 37.5 the tool row's outer buttons (21 units out) are carried through
+    // 0.56 radians and come 6 units forward, and the grid's outer columns
+    // (14 out) through 0.37 for 2.5 units. A bow rather than a bend.
+    constexpr float kMenuCurveRadius = 37.5f;
 
     // Every icon in the menu is drawn at this scale
     constexpr float kButtonScale = 1.02f;
@@ -427,18 +424,18 @@ bool ThreadMenu::CreateMenu()
     // numbers they were tuned as, and hover and grab follow the curve because
     // interaction is tested against the same positions that get drawn.
     //
-    // Radius is set against how wide the menu is - see kMenuCurveRadius.
+    // Radius is the same as Dress Up's - see kMenuCurveRadius.
     //
-    // Horizontal only, which is where this parts company with Dress Up's dome.
-    // The curve pivots on the root's own origin, and this menu is not centred on
-    // it: the tool row sits at the origin, the grid stacks upward from +8 to
-    // around +30, and only the hover text is below. A vertical bend would
-    // therefore carry the top of the grid through a far larger angle than
-    // anything below it and fold it over the player, rather than bringing two
-    // symmetrical edges in the way it does on a menu that reaches as far below
-    // its centre as above it.
+    // Both axes, so the menu is a dome around the player rather than a length
+    // of guttering. Worth knowing that the warp pivots on the root's origin and
+    // this menu is not centred there: the tool row sits at the origin and the
+    // grid stacks upward from it, so the vertical bend is lopsided, carrying
+    // the top of the grid forward while there is almost nothing below the
+    // origin to carry the other way. At this radius that is a tilt rather than
+    // a fold - the grid's top is around 30 units up, which is 0.8 radians - and
+    // it reads as the menu leaning its top toward you.
     m_root->SetCurvature(kMenuCurveRadius, /*horizontal*/ true,
-                         /*vertical*/ false, /*tiltElements*/ true);
+                         /*vertical*/ true, /*tiltElements*/ true);
 
     // Navigation grid (row-major with vertical scrolling)
     P3DUI::RowGridConfig gridConfig = P3DUI::RowGridConfig::Default("nav_grid");
@@ -524,7 +521,10 @@ bool ThreadMenu::CreateMenu()
     m_hoverText = m_api->CreateText(textConfig);
     if (m_hoverText) {
         m_root->AddChild(m_hoverText);
-        m_hoverText->SetLocalPosition(0, 0, -10.0f);  // Position below control row
+        // Below the control row, but 10cm (7 units, at Skyrim's ~70 to the
+        // metre) higher than it used to sit: at -10 it had drifted far enough
+        // under the rows to read as detached from them.
+        m_hoverText->SetLocalPosition(0, 0, -3.0f);
     }
 
     m_root->SetVisible(false);
