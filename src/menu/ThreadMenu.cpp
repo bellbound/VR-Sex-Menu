@@ -52,6 +52,24 @@ namespace {
         return (static_cast<float>(columns) - 0.5f) * kIconSpacing;
     }
 
+    // Radius of the cylinder the menu is wrapped onto, in game units - see the
+    // call in CreateMenu. Smaller bends harder; 0 is flat again.
+    //
+    // Judged against the menu's own half-width rather than against how far away
+    // it sits, because what the eye reads as curvature is how far round the
+    // cylinder the edges are carried - halfWidth/radius - and that has nothing
+    // to do with the distance to the head. The widest thing here is the tool
+    // row: seven slots at kIconSpacing puts its outer buttons 21 units out,
+    // where the grid above it reaches 14 and the rows below are clipped to the
+    // grid's width.
+    //
+    // At 17.5 those outer buttons are carried through 1.2 radians and come 11
+    // units forward and 5 inward, while the grid's outer columns move 5 forward
+    // and 1.5 in. That is the same proportion VR Dress Up settled on for its own
+    // menu (37.5 against a 45-unit half-width), so the two menus read as having
+    // the same curve despite this one being half the size.
+    constexpr float kMenuCurveRadius = 17.5f;
+
     // Every icon in the menu is drawn at this scale
     constexpr float kButtonScale = 1.02f;
 
@@ -401,6 +419,26 @@ bool ThreadMenu::CreateMenu()
         spdlog::error("ThreadMenu: Failed to get/create root");
         return false;
     }
+
+    // Bend the whole menu round the player like a curved monitor, the way VR
+    // Dress Up's is. It is a post-process 3DUI applies after the containers have
+    // laid out, so nothing below has to know about it: spacings, column counts
+    // and the scroll extents the two views swap between are all still the flat
+    // numbers they were tuned as, and hover and grab follow the curve because
+    // interaction is tested against the same positions that get drawn.
+    //
+    // Radius is set against how wide the menu is - see kMenuCurveRadius.
+    //
+    // Horizontal only, which is where this parts company with Dress Up's dome.
+    // The curve pivots on the root's own origin, and this menu is not centred on
+    // it: the tool row sits at the origin, the grid stacks upward from +8 to
+    // around +30, and only the hover text is below. A vertical bend would
+    // therefore carry the top of the grid through a far larger angle than
+    // anything below it and fold it over the player, rather than bringing two
+    // symmetrical edges in the way it does on a menu that reaches as far below
+    // its centre as above it.
+    m_root->SetCurvature(kMenuCurveRadius, /*horizontal*/ true,
+                         /*vertical*/ false, /*tiltElements*/ true);
 
     // Navigation grid (row-major with vertical scrolling)
     P3DUI::RowGridConfig gridConfig = P3DUI::RowGridConfig::Default("nav_grid");
