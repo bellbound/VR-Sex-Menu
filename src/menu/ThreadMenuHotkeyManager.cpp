@@ -38,14 +38,12 @@ void ThreadMenuHotkeyManager::Initialize()
     }
 
     if (!InputManager::GetSingleton()->IsInitialized()) {
-        spdlog::warn("ThreadMenuHotkeyManager: InputManager not initialized, hotkey disabled");
+        spdlog::warn("ThreadMenuHotkeyManager: InputManager not initialized, combos disabled");
         return;
     }
 
-    RegisterCallback();
-
-    // The combos are fixed, so unlike the open hotkey this one is registered
-    // once and asks the config on each press whether it is switched on
+    // The combos are fixed, so the callback is registered once and asks the
+    // config on each press whether it is switched on
     m_comboCallbackId = InputManager::GetSingleton()->AddVrButtonCallback(
         kComboButtons,
         [this](bool isLeft, bool isReleased, vr::EVRButtonId buttonId) {
@@ -62,8 +60,6 @@ void ThreadMenuHotkeyManager::Shutdown()
         return;
     }
 
-    UnregisterCallback();
-
     if (m_comboCallbackId != InputManager::InvalidCallbackId) {
         InputManager::GetSingleton()->RemoveVrButtonCallback(m_comboCallbackId);
         m_comboCallbackId = InputManager::InvalidCallbackId;
@@ -71,109 +67,6 @@ void ThreadMenuHotkeyManager::Shutdown()
 
     m_initialized = false;
     spdlog::info("ThreadMenuHotkeyManager shut down");
-}
-
-void ThreadMenuHotkeyManager::OnConfigChanged()
-{
-    if (!m_initialized) {
-        return;
-    }
-
-    // Re-register with new hotkey settings
-    UnregisterCallback();
-    RegisterCallback();
-}
-
-void ThreadMenuHotkeyManager::RegisterCallback()
-{
-    auto config = Config::GetHotkeyConfig();
-
-    if (!config.enabled) {
-        spdlog::info("ThreadMenuHotkeyManager: Hotkey disabled in config");
-        return;
-    }
-
-    m_registeredForLeftHand = config.isLeftHand;
-
-    m_callbackId = InputManager::GetSingleton()->AddVrButtonCallback(
-        config.buttonMask,
-        [this](bool isLeft, bool isReleased, vr::EVRButtonId buttonId) {
-            return OnHotkeyPressed(isLeft, isReleased, buttonId);
-        });
-
-    spdlog::info("ThreadMenuHotkeyManager: Registered hotkey callback (mask=0x{:X}, left={})",
-        config.buttonMask, config.isLeftHand);
-}
-
-void ThreadMenuHotkeyManager::UnregisterCallback()
-{
-    if (m_callbackId != InputManager::InvalidCallbackId) {
-        InputManager::GetSingleton()->RemoveVrButtonCallback(m_callbackId);
-        m_callbackId = InputManager::InvalidCallbackId;
-        spdlog::info("ThreadMenuHotkeyManager: Unregistered hotkey callback");
-    }
-}
-
-bool ThreadMenuHotkeyManager::OnHotkeyPressed(bool isLeft, bool isReleased, vr::EVRButtonId /*buttonId*/)
-{
-    // Only handle presses, not releases
-    if (isReleased) {
-        return false;
-    }
-
-    // Check if the press is from the correct hand
-    if (isLeft != m_registeredForLeftHand) {
-        return false;  // Wrong hand, don't consume
-    }
-
-    // Grip held makes this the second half of a combo, which OnComboPressed
-    // deals with. The open hotkey is the button on its own.
-    if (Config::AreSceneHotkeysEnabled() && IsGripHeld(isLeft)) {
-        return false;
-    }
-
-    // Check if mod is enabled
-    if (!Config::IsModEnabled()) {
-        return false;
-    }
-
-    // === PERFORMANCE OPTIMIZATION ===
-    // Early exit if no OStim threads are running - avoids expensive actor scanning
-    auto* tracker = ThreadTracker::GetSingleton();
-    auto allThreads = tracker->GetAllThreadIds();
-    if (allThreads.empty()) {
-        return false;  // No threads running, don't consume input
-    }
-
-    // Find nearest thread within configured range
-    int32_t nearestThread = FindNearestThreadInRange();
-    if (nearestThread < 0) {
-        // No scenes in range
-        return false;
-    }
-
-    // Get the menu and check its state
-    auto* threadMenu = ThreadMenu::GetSingleton();
-
-    // Toggle logic: if showing this thread, close; otherwise, open for this thread
-    if (threadMenu->IsVisible() && threadMenu->GetThreadId() == nearestThread) {
-        spdlog::info("ThreadMenuHotkeyManager: Closing menu for thread {}", nearestThread);
-        threadMenu->Hide();
-    } else {
-        // Get position for menu (use player position + offset)
-        RE::NiPoint3 menuPos;
-        if (auto* player = RE::PlayerCharacter::GetSingleton()) {
-            menuPos = player->GetPosition();
-            menuPos.z += 120.0f;  // Above player
-        }
-
-        spdlog::info("ThreadMenuHotkeyManager: Opening menu for thread {}", nearestThread);
-        threadMenu->Show(nearestThread, menuPos,
-            isLeft ? ThreadMenu::OpenHand::Left : ThreadMenu::OpenHand::Right);
-    }
-
-    // Consume input based on user preference (prevents normal button action when true)
-    return Config::ShouldPreventHotkeyDefault();
 }
 
 bool ThreadMenuHotkeyManager::OnComboPressed(bool isLeft, bool isReleased, vr::EVRButtonId buttonId)
@@ -214,7 +107,7 @@ bool ThreadMenuHotkeyManager::RunCombo(bool isLeft, vr::EVRButtonId buttonId)
 
     // Show/hide is the one combo that works with the menu closed
     if (buttonId == vr::k_EButton_SteamVR_Trigger) {
-        return ToggleMenuForPlayerScene(isLeft);
+        return ToggleMenuForNearbyScene(isLeft);
     }
 
     // The rest mirror a button of the menu, so there has to be one open
@@ -255,7 +148,7 @@ bool ThreadMenuHotkeyManager::RunCombo(bool isLeft, vr::EVRButtonId buttonId)
     }
 }
 
-bool ThreadMenuHotkeyManager::ToggleMenuForPlayerScene(bool isLeft)
+bool ThreadMenuHotkeyManager::ToggleMenuForNearbyScene(bool isLeft)
 {
     auto* menu = ThreadMenu::GetSingleton();
 
@@ -270,19 +163,26 @@ bool ThreadMenuHotkeyManager::ToggleMenuForPlayerScene(bool isLeft)
         return false;
     }
 
-    // Only the player's own scene. Grip + trigger is a common enough thing to
-    // do with both hands that swallowing it for a scene across the room, or for
-    // none at all, would be felt everywhere.
-    auto threadId = ThreadTracker::GetSingleton()->GetThreadForActor(player);
-    if (!threadId) {
+    // The player's own scene first, so it stays reachable however short the
+    // range is set. Failing that, the nearest one within it - beyond that the
+    // grip stays the game's, since grip + trigger is a common enough thing to
+    // do with both hands that swallowing it for nothing would be felt.
+    int32_t threadId = -1;
+    if (auto ownThread = ThreadTracker::GetSingleton()->GetThreadForActor(player)) {
+        threadId = *ownThread;
+    } else {
+        threadId = FindNearestThreadInRange();
+    }
+
+    if (threadId < 0) {
         return false;
     }
 
     RE::NiPoint3 menuPos = player->GetPosition();
     menuPos.z += 120.0f;  // Above player
 
-    spdlog::info("ThreadMenuHotkeyManager: Grip + trigger - opening menu for thread {}", *threadId);
-    menu->Show(*threadId, menuPos,
+    spdlog::info("ThreadMenuHotkeyManager: Grip + trigger - opening menu for thread {}", threadId);
+    menu->Show(threadId, menuPos,
         isLeft ? ThreadMenu::OpenHand::Left : ThreadMenu::OpenHand::Right);
     return true;
 }
@@ -295,7 +195,7 @@ int32_t ThreadMenuHotkeyManager::FindNearestThreadInRange()
     }
 
     const RE::NiPoint3 playerPos = player->GetPosition();
-    const float maxDistance = Config::GetHotkeyMaxDistance();
+    const float maxDistance = Config::GetMaxSceneDistance();
     const float maxDistSq = maxDistance * maxDistance;
 
     auto* tracker = ThreadTracker::GetSingleton();

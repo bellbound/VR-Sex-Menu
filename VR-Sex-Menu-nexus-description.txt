@@ -11,7 +11,7 @@
 [size=4]Pick the participants from a UI Extensions menu and the scene starts right there.[/size]
 
 [color=#ffe599][size=4][b]◈ Open It However You Like[/b][/size][/color]
-[size=4]Cast the lesser power at any NPC, or grab one with a hand and pull the trigger on the other. Running scenes can also be reached by activating a participant or with a hotkey, both set up in the MCM. The spell can be removed from your inventory in the MCM if you only use the other options.[/size]
+[size=4]Cast the lesser power at any NPC, or grab one with a hand and pull the trigger on the other. Running scenes can also be reached by activating a participant, or by holding grip and pulling the trigger near one. The spell can be removed from your inventory in the MCM if you only use the other options.[/size]
 
 [color=#ffe599][size=4][b]◈ Put The Menu Where You Want It[/b][/size][/color]
 [size=4]Grab the glowing orb and move the menu anywhere around you.[/size]

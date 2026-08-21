@@ -1,6 +1,5 @@
 #pragma once
 #include "ConfigStorage.h"
-#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -22,16 +21,7 @@ namespace Options {
     // [Controls] Section
     // ==========================================================================
 
-    /// VR controller button to open the VR Sex Menu for nearby OStim scenes.
-    /// Type: select, Options: "None", "A", "B", "Right Thumbstick", "Left Thumbstick"
-    /// Default: "None"
-    constexpr std::string_view kHotkeyButton = "Controls:sHotkeyButton";
-
-    /// Whether to block the hotkey button's normal game function when in range of a scene.
-    /// Type: bool (int 0/1), Default: 1 (enabled)
-    constexpr std::string_view kPreventHotkeyDefault = "Controls:bPreventHotkeyDefault";
-
-    /// Maximum distance in meters to detect OStim scenes for the hotkey.
+    /// Maximum distance in meters at which grip + trigger finds an OStim scene.
     /// Type: float, Range: 0-20, Default: 7.0
     constexpr std::string_view kMaxSceneRange = "Controls:fMaxSceneRange";
 
@@ -111,60 +101,16 @@ inline bool IsActivateNpcInSceneEnabled()
 inline bool ShowPopupForActorsInScene() { return IsActivateNpcInSceneEnabled(); }
 
 // ============================================================================
-// [Controls] - Hotkey Configuration
+// [Controls] - Scene Range
 // ============================================================================
 
-enum class HotkeyOption : uint8_t
-{
-    None = 0,
-    A,
-    B,
-    RightThumbstick,
-    LeftThumbstick
-};
-
-struct HotkeyConfig
-{
-    uint64_t buttonMask;
-    bool isLeftHand;
-    bool enabled;
-};
-
-/// Get the currently selected hotkey option from INI.
-inline HotkeyOption GetHotkeyOption()
-{
-    std::string value = ConfigStorage::GetSingleton()->GetSelect(Options::kHotkeyButton);
-
-    if (value == "A") return HotkeyOption::A;
-    if (value == "B") return HotkeyOption::B;
-    if (value == "Right Thumbstick") return HotkeyOption::RightThumbstick;
-    if (value == "Left Thumbstick") return HotkeyOption::LeftThumbstick;
-    return HotkeyOption::None;
-}
-
-/// Get the button mask and hand for the current hotkey setting.
-/// Returns {buttonMask, isLeftHand, enabled}
-HotkeyConfig GetHotkeyConfig();
-
-/// Whether to block the hotkey button's normal game function when in range.
-inline bool ShouldPreventHotkeyDefault()
-{
-    return ConfigStorage::GetSingleton()->GetInt(Options::kPreventHotkeyDefault, 1) != 0;
-}
-
-/// Maximum distance in game units to detect OStim scenes for the hotkey.
+/// Maximum distance in game units at which grip + trigger finds a scene.
 /// Converts from meters (stored in INI) to game units (~70 units/meter).
-inline float GetHotkeyMaxDistance()
+inline float GetMaxSceneDistance()
 {
     float meters = ConfigStorage::GetSingleton()->GetFloat(Options::kMaxSceneRange, 7.0f);
     // Convert meters to Skyrim units (1 meter ≈ 70 units)
     return meters * 70.0f;
-}
-
-/// Get max distance in meters (for display in MCM).
-inline float GetHotkeyMaxDistanceMeters()
-{
-    return ConfigStorage::GetSingleton()->GetFloat(Options::kMaxSceneRange, 7.0f);
 }
 
 } // namespace Config

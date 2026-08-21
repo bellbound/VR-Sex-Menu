@@ -1,8 +1,15 @@
 Next version
 
+Controls:
+- The configurable open hotkey is gone from the MCM, along with the setting that
+  went with it for whether to block the button's normal use. Grip + trigger is
+  the one way in now, and it opens the menu for the nearest scene in range as
+  well as for one you are in yourself
+- "Max. range to OStim Scene" now governs how far grip + trigger reaches
+
 The menu:
-- Opening the menu with the hotkey, or with grip + trigger, now puts it at the
-  hand that pressed rather than at a fixed spot in front of you
+- Opening the menu with grip + trigger now puts it at the hand that pressed
+  rather than at a fixed spot in front of you
 - The previous and next stage buttons in the category view sit half again as far
   apart, so reaching for one of them cannot land between the two
 
